@@ -1,0 +1,526 @@
+/* =============================================================================
+   OPÉRATION CASCADE — interface
+   Identité reprise de CASCADE : fond presque noir, vert phosphore, monospace.
+   ========================================================================== */
+
+:root {
+  --fond:        #070b0d;
+  --fond-panneau:rgba(10, 18, 15, 0.92);
+  --bord:        #17352a;
+  --bord-clair:  #2a5c45;
+  --vert:        #7cf2a8;
+  --vert-sombre: #3f8f63;
+  --ambre:       #ffb02e;
+  --rouge:       #ff4d4d;
+  --texte:       #cfe9da;
+  --texte-faible:#7c9c8c;
+  --ombre:       0 18px 50px rgba(0, 0, 0, 0.65);
+  --mono: ui-monospace, "SFMono-Regular", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  height: 100%;
+  touch-action: manipulation;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--mono);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#ecran { position: fixed; inset: 0; overflow: hidden; touch-action: none; }
+
+#rendu {
+  position: absolute; inset: 0;
+  touch-action: none;
+  width: 100%; height: 100%;
+  display: block;
+  background: #05080a;
+  cursor: crosshair;
+}
+
+.cache { display: none !important; }
+
+/* ------------------------------------------------------------------ voiles */
+.voile {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(12, 34, 24, 0.55) 0%, rgba(4, 8, 8, 0.92) 70%),
+    linear-gradient(180deg, rgba(3, 6, 6, 0.55), rgba(3, 6, 6, 0.9));
+  backdrop-filter: blur(6px) saturate(0.9);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .28s ease, visibility .28s ease;
+  z-index: 20;
+}
+.voile.actif { opacity: 1; visibility: visible; }
+
+.panneau-accueil {
+  position: relative;
+  width: min(760px, 100%);
+  padding: 44px 48px 36px;
+  border: 1px solid var(--bord);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(9, 20, 15, 0.96), rgba(5, 11, 9, 0.98));
+  box-shadow: var(--ombre), inset 0 1px 0 rgba(124, 242, 168, 0.06);
+  overflow: hidden;
+  animation: apparait .4s ease both;
+}
+.panneau-accueil.etroit { width: min(460px, 100%); }
+.panneau-accueil::before {
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(180deg, rgba(124,242,168,.032) 0 1px, transparent 1px 4px);
+  pointer-events: none;
+}
+.panneau-accueil::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--vert), transparent);
+  opacity: .55;
+}
+@keyframes apparait {
+  from { opacity: 0; transform: translateY(10px) scale(.995); }
+  to   { opacity: 1; transform: none; }
+}
+
+.surtitre {
+  font-size: 10px; letter-spacing: .34em; color: var(--vert-sombre);
+  text-transform: uppercase; margin-bottom: 18px;
+}
+
+h1 {
+  margin: 0 0 18px;
+  font-size: clamp(34px, 6vw, 58px);
+  line-height: .94;
+  letter-spacing: .02em;
+  font-weight: 800;
+  color: #eafff1;
+  text-shadow: 0 0 26px rgba(124, 242, 168, .22);
+}
+h1 span { display: block; color: var(--vert); font-weight: 800; }
+.sous-titre-accueil {
+  margin: -10px 0 24px; font-size: 12px; letter-spacing: .18em;
+  color: var(--vert-sombre); text-transform: uppercase;
+}
+h2 {
+  margin: 0 0 22px; font-size: 22px; letter-spacing: .18em;
+  color: #eafff1; font-weight: 700;
+}
+
+.accroche {
+  margin: 0 0 30px; max-width: 52ch;
+  color: var(--texte-faible); font-size: 13.5px; line-height: 1.65;
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+.bouton {
+  appearance: none;
+  border: 1px solid var(--bord-clair);
+  background: rgba(18, 38, 30, .55);
+  color: var(--texte);
+  font: inherit; font-size: 12px; letter-spacing: .18em;
+  padding: 13px 22px;
+  cursor: pointer;
+  border-radius: 2px;
+  text-decoration: none;
+  transition: background .16s, border-color .16s, color .16s, transform .06s;
+}
+.bouton:hover { background: rgba(28, 62, 47, .7); border-color: var(--vert-sombre); color: #eafff1; }
+.bouton:active { transform: translateY(1px); }
+.bouton:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+
+.bouton.principal {
+  background: linear-gradient(180deg, #6fe79c, #37a86a);
+  border-color: #7cf2a8;
+  color: #04140c;
+  font-weight: 800;
+  box-shadow: 0 0 0 rgba(124, 242, 168, 0), 0 10px 30px rgba(60, 190, 120, .18);
+}
+.bouton.principal:hover { background: linear-gradient(180deg, #8bffb6, #43c47d); color: #02110a; }
+
+.bouton.discret {
+  background: transparent; border-color: transparent;
+  color: var(--texte-faible); padding-left: 8px; padding-right: 8px;
+}
+.bouton.discret:hover { color: var(--vert); background: transparent; }
+
+.aide-cles {
+  margin-top: 30px; padding-top: 18px;
+  border-top: 1px solid rgba(23, 53, 42, .8);
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+  font-size: 11px; color: var(--texte-faible);
+}
+.aide-cles b {
+  color: var(--vert); font-weight: 600;
+  display: inline-block; min-width: 8px;
+}
+
+/* ------------------------------------------------------------- réglages */
+.ligne-reglage {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 62px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(23, 53, 42, .55);
+  font-size: 12px;
+  color: var(--texte);
+}
+.ligne-reglage output { text-align: right; color: var(--vert); font-size: 12px; }
+.ligne-reglage select {
+  font: inherit; font-size: 12px; color: var(--texte);
+  background: #0c1a14; border: 1px solid var(--bord-clair);
+  padding: 7px 9px; border-radius: 2px;
+}
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 3px; background: #1d3f30; border-radius: 2px; outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--vert); border: 2px solid #06281a; cursor: pointer;
+  box-shadow: 0 0 10px rgba(124,242,168,.5);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--vert); border: 2px solid #06281a; cursor: pointer;
+}
+input[type="checkbox"] { accent-color: #4bd488; width: 16px; height: 16px; }
+
+/* ------------------------------------------------------------------ bilan */
+.bilan {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  background: rgba(23, 53, 42, .6);
+  border: 1px solid rgba(23, 53, 42, .8);
+  margin-bottom: 26px;
+}
+.bilan div {
+  background: #08120e; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.bilan span { font-size: 10px; letter-spacing: .16em; color: var(--texte-faible); }
+.bilan b { font-size: 22px; color: var(--vert); font-weight: 700; }
+
+/* ================================================================== HUD == */
+#hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+
+/* viseur */
+#viseur {
+  position: absolute; left: 50%; top: 50%;
+  width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  --ecart: 9px;
+  transition: opacity .12s;
+}
+#viseur .branche {
+  position: absolute; background: rgba(232, 255, 240, .92);
+  box-shadow: 0 0 4px rgba(0, 0, 0, .95);
+}
+#viseur .haut   { width: 2px; height: 7px; left: 50%; margin-left: -1px; top: calc(50% - var(--ecart) - 7px); }
+#viseur .bas    { width: 2px; height: 7px; left: 50%; margin-left: -1px; top: calc(50% + var(--ecart)); }
+#viseur .gauche { height: 2px; width: 7px; top: 50%; margin-top: -1px; left: calc(50% - var(--ecart) - 7px); }
+#viseur .droite { height: 2px; width: 7px; top: 50%; margin-top: -1px; left: calc(50% + var(--ecart)); }
+#viseur .point {
+  position: absolute; left: 50%; top: 50%; width: 2px; height: 2px;
+  margin: -1px 0 0 -1px; background: var(--vert); border-radius: 50%;
+  box-shadow: 0 0 6px var(--vert);
+}
+#viseur .basse { display: none; }
+
+/* marqueur de touche */
+#marqueur-touche {
+  position: absolute; left: 50%; top: 50%;
+  width: 26px; height: 26px; margin: -13px 0 0 -13px;
+  opacity: 0;
+  background:
+    linear-gradient(45deg, transparent 45%, #fff 46% 54%, transparent 55%) 0 0 / 100% 100%,
+    linear-gradient(-45deg, transparent 45%, #fff 46% 54%, transparent 55%) 0 0 / 100% 100%;
+  mix-blend-mode: screen;
+}
+#marqueur-touche.joue { animation: touche .18s ease-out; }
+@keyframes touche {
+  0% { opacity: 1; transform: scale(.6); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+
+/* bords de dégâts */
+#degats-bord {
+  position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(120% 100% at 50% 50%, transparent 45%, rgba(190, 20, 20, .55) 100%);
+  transition: opacity .35s ease;
+}
+#degats-bord.joue { opacity: 1; transition: opacity .05s; }
+
+#degats-direction {
+  position: absolute; inset: 0; opacity: 0;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+  background: conic-gradient(from 0deg at 50% 50%,
+    transparent 0deg, rgba(255, 70, 70, .45) 6deg,
+    rgba(255, 70, 70, .45) 16deg, transparent 30deg);
+  transition: opacity .45s ease;
+}
+#degats-direction.joue { opacity: 1; transition: opacity .06s; }
+
+/* bandeau haut */
+#bandeau-haut {
+  position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 1px;
+  border: 1px solid rgba(23, 53, 42, .9);
+  background: rgba(4, 10, 8, .55);
+  backdrop-filter: blur(3px);
+}
+#bandeau-haut .bloc {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 22px 9px;
+  background: rgba(6, 14, 11, .55);
+  min-width: 104px;
+}
+#bandeau-haut .etiquette {
+  font-size: 8.5px; letter-spacing: .3em; color: var(--texte-faible);
+}
+#bandeau-haut .valeur {
+  font-size: 21px; font-weight: 700; color: #eafff1; line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+#bandeau-haut .sous { font-size: 9px; color: var(--texte-faible); letter-spacing: .08em; }
+#bandeau-haut .vague .valeur { color: var(--vert); }
+
+/* bandeau bas */
+#bandeau-bas {
+  position: absolute; left: 22px; right: 22px; bottom: 18px;
+  display: flex; justify-content: space-between; align-items: flex-end;
+}
+.sante { display: flex; align-items: center; gap: 12px; }
+.sante .jauge {
+  width: 190px; height: 8px; background: rgba(255,255,255,.08);
+  border: 1px solid rgba(124,242,168,.25);
+  overflow: hidden;
+}
+.sante .remplissage {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #37a86a, #7cf2a8);
+  transition: width .18s ease, background .25s;
+}
+.sante .chiffres { display: flex; align-items: baseline; gap: 4px; }
+.sante .chiffres span:first-child {
+  font-size: 24px; font-weight: 700; color: #eafff1; font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+}
+.sante .unite { font-size: 9px; letter-spacing: .2em; color: var(--texte-faible); }
+
+.munitions { display: flex; align-items: baseline; gap: 8px; text-align: right; }
+.munitions .chargeur {
+  font-size: 30px; font-weight: 700; color: #eafff1;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.munitions .chargeur.vide { color: var(--rouge); }
+.munitions .reserve { font-size: 13px; color: var(--texte-faible); font-variant-numeric: tabular-nums; }
+.munitions .arme {
+  font-size: 9px; letter-spacing: .22em; color: var(--vert-sombre);
+  margin-left: 10px; align-self: center;
+}
+
+/* message central */
+#message-centre {
+  position: absolute; left: 50%; top: 62%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-size: clamp(18px, 3vw, 30px);
+  font-weight: 800; letter-spacing: .22em;
+  color: #eafff1;
+  text-shadow: 0 0 24px rgba(124,242,168,.5), 0 2px 12px #000;
+  animation: message .5s ease both;
+  white-space: normal; max-width: 82vw;
+}
+#message-centre.petit { font-size: clamp(13px, 1.6vw, 18px); letter-spacing: .3em; color: var(--vert); }
+#message-centre.rouge { color: #ffd6d6; text-shadow: 0 0 24px rgba(255,60,60,.6), 0 2px 12px #000; }
+@keyframes message {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.96); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* compteur de performance (F3) */
+#perf {
+  position: absolute; left: 14px; top: 14px;
+  padding: 6px 10px;
+  background: rgba(4, 10, 8, .72);
+  border-left: 2px solid var(--vert-sombre);
+  font-size: 10.5px; line-height: 1.5; color: var(--vert);
+  white-space: pre; letter-spacing: .06em;
+}
+
+/* journal (éliminations) */
+#journal {
+  position: absolute; right: 22px; top: 96px;
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+  font-size: 10.5px; letter-spacing: .12em;
+}
+#journal .entree {
+  padding: 4px 9px;
+  background: rgba(4, 10, 8, .6);
+  border-right: 2px solid var(--vert-sombre);
+  color: var(--texte-faible);
+  animation: entre .25s ease both;
+}
+#journal .entree b { color: var(--vert); }
+@keyframes entre { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+
+/* --------------------------------------------------------------- chargeur */
+.chargement-boite { width: min(420px, 90vw); text-align: center; }
+.jauge-chargement {
+  height: 3px; background: rgba(124,242,168,.12); margin: 18px 0 12px; overflow: hidden;
+}
+#chargement-barre {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #37a86a, #7cf2a8);
+  transition: width .2s ease;
+}
+#chargement-texte { font-size: 10px; letter-spacing: .3em; color: var(--texte-faible); }
+
+/* ------------------------------------------------------------------ erreur */
+#erreur {
+  position: absolute; inset: 0; z-index: 90;
+  display: flex; align-items: center; justify-content: center; padding: 30px;
+  background: #0b0505; color: #ffb3b3; font-size: 13px; line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------------- responsive */
+@media (max-width: 720px) {
+  .panneau-accueil { padding: 28px 22px 24px; }
+  .aide-cles { gap: 6px 12px; font-size: 10px; }
+  #bandeau-haut .bloc { padding: 6px 12px; min-width: 78px; }
+  #bandeau-haut .valeur { font-size: 17px; }
+  .sante .jauge { width: 110px; }
+  #bandeau-bas { left: 12px; right: 12px; bottom: 12px; }
+  .munitions .chargeur { font-size: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001s !important; transition-duration: .001s !important; }
+}
+
+
+/* ====================================================== commandes tactiles */
+#tactile { position: absolute; inset: 0; z-index: 12; pointer-events: none; }
+
+#zone-stick {
+  position: absolute; left: 0; bottom: 0; width: 45%; height: 62%;
+  pointer-events: auto; touch-action: none;
+}
+#stick-base {
+  position: absolute; width: 132px; height: 132px; border-radius: 50%;
+  border: 2px solid rgba(124, 242, 168, .28);
+  background: rgba(6, 14, 11, .32);
+  transform: translate(-50%, -50%);
+  left: 110px; bottom: 110px; top: auto;
+  opacity: 0; transition: opacity .12s;
+  pointer-events: none;
+}
+#stick-base.actif { opacity: 1; }
+/* Au repos, le joystick reste visible et discret : sinon personne ne le trouve. */
+#stick-base.repos { opacity: .4; }
+#stick-pouce {
+  position: absolute; left: 50%; top: 50%; width: 58px; height: 58px;
+  margin: -29px 0 0 -29px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(124,242,168,.85), rgba(55,168,106,.55));
+  border: 1px solid rgba(200, 255, 220, .5);
+  box-shadow: 0 0 18px rgba(124, 242, 168, .35);
+}
+
+#tactile-boutons {
+  position: absolute; right: 16px; bottom: 22px;
+  display: flex; align-items: flex-end; gap: 12px;
+  pointer-events: none;
+}
+.t-bouton {
+  pointer-events: auto; touch-action: none;
+  width: 76px; height: 76px; border-radius: 50%;
+  border: 2px solid rgba(124, 242, 168, .45);
+  background: rgba(10, 24, 18, .55);
+  color: var(--vert); font: inherit; font-size: 11px; letter-spacing: .1em;
+  backdrop-filter: blur(4px);
+  -webkit-user-select: none; user-select: none;
+}
+.t-bouton.tir {
+  width: 96px; height: 96px; font-size: 13px;
+  background: rgba(120, 26, 26, .55); border-color: rgba(255, 120, 120, .6); color: #ffd9d9;
+}
+.t-bouton:active, .t-bouton.actif {
+  background: rgba(124, 242, 168, .28);
+  transform: scale(.96);
+}
+.t-bouton.tir:active, .t-bouton.tir.actif {
+  background: rgba(220, 60, 60, .4);
+}
+.t-bouton.petit { width: 58px; height: 58px; font-size: 10px; }
+
+#t-btn-pause {
+  position: absolute; right: 16px; top: 96px;
+  width: 44px; height: 44px; font-size: 13px; letter-spacing: 0;
+  border-radius: 10px;
+}
+
+#paysage {
+  position: absolute; left: 50%; top: 92px; transform: translateX(-50%);
+  z-index: 30; max-width: 88vw;
+  padding: 9px 14px; border-radius: 6px;
+  background: rgba(6, 14, 11, .92); border: 1px solid var(--bord-clair);
+  color: var(--texte); font-size: 11.5px; letter-spacing: .05em;
+  text-align: center; white-space: normal; line-height: 1.4;
+  font-size: 11px;
+}
+#paysage .surtitre { display: none; }
+#paysage p { margin: 0; color: var(--texte); }
+
+/* En tactile, la barre du bas remonte au-dessus des boutons. */
+#hud.tactile #bandeau-bas { bottom: 128px; }
+#hud.tactile .munitions .chargeur { font-size: 22px; }
+#hud.tactile #journal { top: 70px; }
+
+@media (max-height: 420px) {
+  .t-bouton { width: 64px; height: 64px; }
+  .t-bouton.tir { width: 82px; height: 82px; }
+  .t-bouton.petit { width: 50px; height: 50px; }
+  #stick-base { width: 112px; height: 112px; left: 92px; bottom: 92px; }
+}
+
+/* ------------------------------------------------------------ diagnostic */
+#debug {
+  position: absolute; left: 8px; top: 8px; z-index: 80;
+  padding: 8px 10px; max-width: 62vw;
+  background: rgba(0, 0, 0, .82); border: 1px solid #2a5c45;
+  font: 10px/1.45 ui-monospace, monospace; color: #7cf2a8;
+  white-space: pre; pointer-events: none;
+}
+
+.version {
+  margin-top: 18px; font-size: 9.5px; letter-spacing: .22em;
+  color: var(--vert-sombre); text-transform: uppercase;
+}
+
+/* ------------------------------------------------- mise en page portrait */
+@media (orientation: portrait) {
+  #tactile-boutons {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 8px; right: 10px; bottom: 12px;
+    align-items: end;
+  }
+  .t-bouton { width: 58px; height: 58px; font-size: 9.5px; }
+  .t-bouton.tir { width: 74px; height: 74px; font-size: 12px; }
+  .t-bouton.petit { width: 52px; height: 52px; font-size: 9px; }
+  #stick-base { width: 104px; height: 104px; left: 70px; bottom: 78px; }
+  #t-btn-pause { top: 142px; }
+  #hud.tactile #bandeau-bas { bottom: 196px; }
+  #hud.tactile #bandeau-haut .bloc { padding: 6px 10px; min-width: 66px; }
+  #message-centre { top: 42%; font-size: 16px; letter-spacing: .16em; }
+}

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#070b0d">
+<title>OPÉRATION — assaut nocturne</title>
+<link rel="stylesheet" href="./style.css?v=20261022e">
+</head>
+<body>
+
+<div id="ecran">
+  <canvas id="rendu" aria-label="Vue à la première personne"></canvas>
+
+  <!-- ============================ HUD ============================ -->
+  <div id="hud" class="cache">
+    <div id="viseur" aria-hidden="true">
+      <span class="branche haut"></span>
+      <span class="branche bas"></span>
+      <span class="branche gauche"></span>
+      <span class="branche droite"></span>
+      <span class="point"></span>
+    </div>
+    <div id="marqueur-touche" aria-hidden="true"></div>
+
+    <div id="degats-bord" aria-hidden="true"></div>
+    <div id="degats-direction" aria-hidden="true"></div>
+
+    <div id="bandeau-haut">
+      <div class="bloc vague">
+        <span class="etiquette">VAGUE</span>
+        <span class="valeur" id="hud-vague">1</span>
+        <span class="sous" id="hud-restants">6 hostiles</span>
+      </div>
+      <div class="bloc score">
+        <span class="etiquette">SCORE</span>
+        <span class="valeur" id="hud-score">0</span>
+      </div>
+      <div class="bloc chrono">
+        <span class="etiquette">TEMPS</span>
+        <span class="valeur" id="hud-temps">00:00</span>
+      </div>
+    </div>
+
+    <div id="bandeau-bas">
+      <div class="sante">
+        <div class="jauge"><div class="remplissage" id="hud-sante-barre"></div></div>
+        <div class="chiffres"><span id="hud-sante">100</span><span class="unite">PV</span></div>
+      </div>
+      <div class="munitions">
+        <span class="chargeur" id="hud-chargeur">30</span>
+        <span class="reserve">/ <span id="hud-reserve">120</span></span>
+        <span class="arme" id="hud-arme">MK-7</span>
+      </div>
+    </div>
+
+    <div id="message-centre" class="cache"></div>
+
+    <!-- Commandes tactiles (téléphone / tablette) -->
+    <div id="tactile" class="cache">
+      <div id="zone-stick" aria-hidden="true">
+        <div id="stick-base"><div id="stick-pouce"></div></div>
+      </div>
+      <button type="button" id="t-btn-pause" class="t-bouton pause" aria-label="Pause">II</button>
+      <div id="tactile-boutons">
+        <button type="button" id="t-btn-viser" class="t-bouton">VISER</button>
+        <button type="button" id="t-btn-tir" class="t-bouton tir">TIR</button>
+        <button type="button" id="t-btn-recharger" class="t-bouton petit">RECH.</button>
+        <button type="button" id="t-btn-saut" class="t-bouton petit">SAUT</button>
+      </div>
+      <div id="paysage" class="cache">
+        <div>
+          <p>Paysage conseillé pour plus de confort.</p>
+        </div>
+      </div>
+    </div>
+    <div id="perf" class="cache"></div>
+    <div id="journal" aria-live="polite"></div>
+  </div>
+
+  <!-- ========================= ÉCRAN D'ACCUEIL ========================= -->
+  <div id="accueil" class="voile actif">
+    <div class="panneau-accueil">
+      <div class="surtitre">RASPI-WEB · DIVISION OPÉRATIONS</div>
+      <h1>OPÉRATION</h1>
+      <p class="sous-titre-accueil">assaut nocturne — dépôt logistique</p>
+      <p class="accroche">
+        Le quartier est bouclé. Les hostiles tiennent le dépôt. Tu es seul, tu as un fusil
+        et des vagues à tenir.
+      </p>
+      <div class="actions">
+        <button class="bouton principal" id="btn-jouer">JOUER</button>
+        <button class="bouton" id="btn-reglages">RÉGLAGES</button>
+        <button class="bouton discret" id="btn-debug">DIAGNOSTIC</button>
+        <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
+      </div>
+      <div class="version" id="version">build 20261022e</div>
+      <div class="aide-cles" id="aide-clavier">
+        <span><b>ZQSD</b> déplacer</span>
+        <span><b>Souris</b> viser</span>
+        <span><b>Clic gauche</b> tirer</span>
+        <span><b>Clic droit</b> visée</span>
+        <span><b>Maj</b> sprint</span>
+        <span><b>Ctrl</b> accroupi</span>
+        <span><b>R</b> recharger</span>
+        <span><b>Échap</b> pause</span>
+      </div>
+      <div class="aide-cles cache" id="aide-tactile">
+        <span><b>Glisser</b> viser</span>
+        <span><b>2 tapes</b> tirer</span>
+        <span><b>Joystick</b> déplacer</span>
+        <span><b>Boutons</b> tirer / viser / recharger</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================== RÉGLAGES =========================== -->
+  <div id="reglages" class="voile">
+    <div class="panneau-accueil etroit">
+      <h2>RÉGLAGES</h2>
+      <label class="ligne-reglage">
+        <span>Sensibilité souris</span>
+        <input type="range" id="reg-sensibilite" min="20" max="300" step="5" value="100">
+        <output id="reg-sensibilite-val">100 %</output>
+      </label>
+      <label class="ligne-reglage">
+        <span>Volume</span>
+        <input type="range" id="reg-volume" min="0" max="100" step="1" value="70">
+        <output id="reg-volume-val">70 %</output>
+      </label>
+      <label class="ligne-reglage">
+        <span>Qualité</span>
+        <select id="reg-qualite">
+          <option value="basse">Basse (fluide)</option>
+          <option value="normale" selected>Normale</option>
+          <option value="haute">Haute</option>
+        </select>
+      </label>
+      <label class="ligne-reglage">
+        <span>Inverser l'axe Y</span>
+        <input type="checkbox" id="reg-inverser">
+      </label>
+      <label class="ligne-reglage">
+        <span>Commandes tactiles</span>
+        <input type="checkbox" id="reg-tactile">
+      </label>
+      <div class="actions">
+        <button class="bouton principal" id="btn-fermer-reglages">RETOUR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================== PAUSE ============================== -->
+  <div id="pause" class="voile">
+    <div class="panneau-accueil etroit">
+      <h2>PAUSE</h2>
+      <div class="actions">
+        <button class="bouton principal" id="btn-reprendre">REPRENDRE</button>
+        <button class="bouton" id="btn-pause-reglages">RÉGLAGES</button>
+        <button class="bouton" id="btn-abandonner">ABANDONNER</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ FIN DE PARTIE ============================ -->
+  <div id="fin" class="voile">
+    <div class="panneau-accueil etroit">
+      <div class="surtitre" id="fin-surtitre">OPÉRATION TERMINÉE</div>
+      <h2 id="fin-titre">TU ES TOMBÉ</h2>
+      <div class="bilan">
+        <div><span>Vagues tenues</span><b id="fin-vagues">0</b></div>
+        <div><span>Hostiles neutralisés</span><b id="fin-elimines">0</b></div>
+        <div><span>Score</span><b id="fin-score">0</b></div>
+        <div><span>Temps</span><b id="fin-temps">00:00</b></div>
+      </div>
+      <div class="actions">
+        <button class="bouton principal" id="btn-rejouer">REJOUER</button>
+        <button class="bouton" id="btn-menu">MENU</button>
+        <button class="bouton discret" id="btn-debug">DIAGNOSTIC</button>
+        <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MATÉRIEL INCOMPATIBLE ======================= -->
+  <div id="incompatible" class="voile">
+    <div class="panneau-accueil etroit">
+      <div class="surtitre">OPÉRATION</div>
+      <h2 id="incompatible-titre">MATÉRIEL REQUIS</h2>
+      <p class="accroche" id="incompatible-texte" style="margin-bottom:24px"></p>
+      <div class="actions">
+        <button class="bouton discret" id="btn-debug">DIAGNOSTIC</button>
+        <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ CHARGEMENT ============================ -->
+  <div id="chargement" class="voile actif">
+    <div class="chargement-boite">
+      <div class="surtitre">OPÉRATION</div>
+      <div class="jauge-chargement"><div id="chargement-barre"></div></div>
+      <div id="chargement-texte">Déploiement…</div>
+    </div>
+  </div>
+
+  <div id="debug" class="cache"></div>
+  <div id="erreur" class="cache"></div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js?v=20261022e" } }
+</script>
+<script type="module" src="./js/main.js?v=20261022e"></script>
+</body>
+</html>
