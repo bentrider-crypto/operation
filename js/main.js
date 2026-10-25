@@ -1,19 +1,26 @@
 import * as THREE from "three";
-import { CONFIG, ETATS } from "./config.js?v=20261022e";
-import { Monde } from "./world.js?v=20261022e";
-import { Joueur, Entrees } from "./player.js?v=20261022e";
-import { Arme } from "./weapon.js?v=20261022e";
-import { GestionEnnemis } from "./enemies.js?v=20261022e";
-import { PostFX } from "./postfx.js?v=20261022e";
-import { Audio } from "./audio.js?v=20261022e";
+import { CONFIG, ETATS } from "./config.js?v=20261024h";
+import { Monde } from "./world.js?v=20261024h";
+import { Joueur, Entrees } from "./player.js?v=20261024h";
+import { Arme } from "./weapon.js?v=20261024h";
+import { GestionEnnemis } from "./enemies.js?v=20261024h";
+import { PostFX } from "./postfx.js?v=20261024h";
+import { Audio } from "./audio.js?v=20261024h";
 
 const $ = (id) => document.getElementById(id);
 
+const CLE_REGLAGES = "cascade-operation-reglages-v2";
+const CLE_REGLAGES_ANCIENNE = "cascade-operation-reglages";
+const CLE_TUTO_VU = "cascade-operation-tuto-vu";
+const CLE_TUTO_TOUJOURS = "cascade-operation-tuto-toujours";
+
 const REGLAGES_DEFAUT = {
   sensibilite: 100,
+  sensibiliteTactile: 100,
   volume: 70,
   qualite: "normale",
   inverser: false,
+  aideVisee: true,
   tactile: null,
 };
 
@@ -24,10 +31,20 @@ class Jeu {
     this.canvas = $("rendu");
     this.etat = ETATS.CHARGEMENT;
     this.reglages = this._chargerReglages();
-    // Sur téléphone, on part directement en qualité basse : c'est là que ça compte.
+    // Le choix explicite de l'utilisateur prime sur la détection.
     if (this.reglages.tactile === true) this.tactile = true;
+    else if (this.reglages.tactile === false) this.tactile = false;
+    // Sur téléphone, on part directement en qualité basse : c'est là que ça compte.
     if (this.tactile && !this._reglagesSauves) this.reglages.qualite = "basse";
     this.qualite = CONFIG.rendu.qualite[this.reglages.qualite] || CONFIG.rendu.qualite.normale;
+
+    this._resScale = 1;
+    this._adaptTemps = 0;
+    this._adaptImages = 0;
+    this._dernierFps = 60;
+    this._vibrationTimer = 0;
+    this._record = this._chargerRecord();
+    this._chargerTuto();
 
     this._initRendu();
 
@@ -62,15 +79,45 @@ class Jeu {
   /* --------------------------------------------------------------- réglages */
   _chargerReglages() {
     try {
-      const brut = localStorage.getItem("cascade-operation-reglages");
-      if (brut) { this._reglagesSauves = true; return { ...REGLAGES_DEFAUT, ...JSON.parse(brut) }; }
+      const brut = localStorage.getItem(CLE_REGLAGES);
+      if (brut) {
+        this._reglagesSauves = true;
+        return { ...REGLAGES_DEFAUT, ...JSON.parse(brut) };
+      }
+
+      // Migration depuis l'ancienne version : on conserve les préférences,
+      // mais on oublie « tactile:false » qui pouvait laisser un téléphone en
+      // mode souris, sans aucune commande utilisable.
+      const ancien = localStorage.getItem(CLE_REGLAGES_ANCIENNE);
+      if (ancien) {
+        const v = JSON.parse(ancien) || {};
+        const tactile = v.tactile === true ? true : null;
+        return { ...REGLAGES_DEFAUT, ...v, tactile };
+      }
     } catch (e) { /* stockage indisponible : on continue avec les défauts */ }
     return { ...REGLAGES_DEFAUT };
   }
 
   _sauverReglages() {
-    try { localStorage.setItem("cascade-operation-reglages", JSON.stringify(this.reglages)); }
+    try {
+      localStorage.setItem(CLE_REGLAGES, JSON.stringify(this.reglages));
+      this._reglagesSauves = true;
+    } catch (e) { /* ignore */ }
+  }
+
+  _chargerRecord() {
+    try { return parseInt(localStorage.getItem("cascade-operation-record") || "0", 10) || 0; }
+    catch (e) { return 0; }
+  }
+
+  _sauverRecord() {
+    try { localStorage.setItem("cascade-operation-record", String(this._record)); }
     catch (e) { /* ignore */ }
+  }
+
+  _majRecordAccueil() {
+    const el = $("record-accueil");
+    if (el) el.textContent = `RECORD ${String(this._record).padStart(4, "0")}`;
   }
 
   _initRendu() {
@@ -80,7 +127,7 @@ class Jeu {
       powerPreference: "high-performance",
       stencil: false,
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualite.pixelRatioMax));
+    this.renderer.setPixelRatio(this._ratioPixel());
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
     this.renderer.shadowMap.enabled = this.qualite.ombres;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -90,14 +137,24 @@ class Jeu {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 320);
 
+    this.canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      this._pause();
+      this._erreur("Le contexte 3D a été perdu. Recharge la page pour reprendre.");
+    });
+
     window.addEventListener("resize", () => this._redimensionner());
+  }
+
+  _ratioPixel() {
+    return Math.min(window.devicePixelRatio || 1, this.qualite.pixelRatioMax) * (this._resScale || 1);
   }
 
   _redimensionner() {
     const l = window.innerWidth, h = window.innerHeight;
     this.camera.aspect = l / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.qualite.pixelRatioMax));
+    this.renderer.setPixelRatio(this._ratioPixel());
     this.renderer.setSize(l, h, false);
     const taille = new THREE.Vector2();
     this.renderer.getDrawingBufferSize(taille);
@@ -117,9 +174,13 @@ class Jeu {
         // Branchés dans tous les cas : ça ne coûte rien sans doigts,
         // et ça permet d'activer le tactile au premier contact.
         this.entrees.brancherVue(this.canvas);
-        this.entrees.brancherStick($("zone-stick"), $("stick-base"), $("stick-pouce"));
+        this.entrees.brancherDirections($("dpad"));
         this.arme = new Arme(this.camera, this.scene, this.audio);
         this.arme.onTouche = (tete) => this._surTouche(tete);
+        this.arme.onLampadaire = () => {
+          this._journal("LAMPADAIRE ÉTEINT");
+          this._vibrer(12);
+        };
       }],
       ["Armement des hostiles…", () => {
         this.ennemis = new GestionEnnemis(this.scene, this.monde, this.audio, this.joueur);
@@ -150,14 +211,21 @@ class Jeu {
 
   /* ----------------------------------------------------------------- menus */
   _cables() {
-    $("btn-jouer").addEventListener("click", () => { this.audio.interface(); this._lancerPartie(); });
-    $("btn-debug").addEventListener("click", () => {
+    $("btn-jouer").addEventListener("click", () => { this.audio.interface(); this._demanderLancer(); });
+    $("btn-tuto").addEventListener("click", () => { this.audio.interface(); this._ouvrirTuto(); });
+    $("btn-tuto-jouer").addEventListener("click", () => { this.audio.interface(); this._lancerDepuisTuto(); });
+    $("btn-tuto-retour").addEventListener("click", () => { this.audio.interface(); this._fermerTuto(); });
+    $("tuto-toujours").addEventListener("change", () => {
+      this._tutoToujours = $("tuto-toujours").checked;
+      this._sauverTuto();
+    });
+    document.querySelectorAll(".btn-debug").forEach((b) => b.addEventListener("click", () => {
       const el = $("debug");
       const visible = !el.classList.contains("cache");
       if (visible) el.classList.add("cache");
       else this._afficherDiagnostic();
-    });
-    $("btn-rejouer").addEventListener("click", () => { this.audio.interface(); this._lancerPartie(); });
+    }));
+    $("btn-rejouer").addEventListener("click", () => { this.audio.interface(); this._demanderLancer(); });
     $("btn-reglages").addEventListener("click", () => { this.audio.interface(); this._ouvrirReglages("accueil"); });
     $("btn-pause-reglages").addEventListener("click", () => { this.audio.interface(); this._ouvrirReglages("pause"); });
     $("btn-fermer-reglages").addEventListener("click", () => { this.audio.interface(); this._fermerReglages(); });
@@ -165,21 +233,48 @@ class Jeu {
     $("btn-abandonner").addEventListener("click", () => { this.audio.interface(); this._allerAccueil(); });
     $("btn-menu").addEventListener("click", () => { this.audio.interface(); this._allerAccueil(); });
 
-    const sens = $("reg-sensibilite"), vol = $("reg-volume");
-    const qual = $("reg-qualite"), inv = $("reg-inverser"), tact = $("reg-tactile");
+    // Plein écran : utile sur Android, ignoré proprement sur iPhone.
+    const fsDispo = typeof document.documentElement.requestFullscreen === "function";
+    document.querySelectorAll(".btn-plein-ecran").forEach((b) => {
+      if (!fsDispo) { b.classList.add("cache"); return; }
+      b.addEventListener("click", () => { this.audio.interface(); this._pleinEcran(); });
+    });
+
+    // Filet de sécurité : si un téléphone a été laissé en mode souris par
+    // d'anciens réglages, un bouton visible permet de réactiver le tactile.
+    $("btn-tactile")?.addEventListener("click", () => {
+      this.audio.interface();
+      this.reglages.tactile = true;
+      this._sauverReglages();
+      this._activerTactile();
+    });
+
+    const sens = $("reg-sensibilite"), sensT = $("reg-sensibilite-tactile");
+    const vol = $("reg-volume"), qual = $("reg-qualite");
+    const inv = $("reg-inverser"), tact = $("reg-tactile"), aide = $("reg-aide-visee");
     sens.value = this.reglages.sensibilite;
+    sensT.value = this.reglages.sensibiliteTactile;
     vol.value = this.reglages.volume;
     qual.value = this.reglages.qualite;
     inv.checked = this.reglages.inverser;
     tact.checked = this.tactile;
+    aide.checked = this.reglages.aideVisee !== false;
     $("aide-clavier").classList.toggle("cache", this.tactile);
     $("aide-tactile").classList.toggle("cache", !this.tactile);
     $("reg-sensibilite-val").textContent = `${this.reglages.sensibilite} %`;
+    $("reg-sensibilite-tactile-val").textContent = `${this.reglages.sensibiliteTactile} %`;
     $("reg-volume-val").textContent = `${this.reglages.volume} %`;
+    this._majRecordAccueil();
+    this._majBoutonTactile();
 
     sens.addEventListener("input", () => {
       this.reglages.sensibilite = Number(sens.value);
       $("reg-sensibilite-val").textContent = `${sens.value} %`;
+      this._sauverReglages();
+    });
+    sensT.addEventListener("input", () => {
+      this.reglages.sensibiliteTactile = Number(sensT.value);
+      $("reg-sensibilite-tactile-val").textContent = `${sensT.value} %`;
       this._sauverReglages();
     });
     vol.addEventListener("input", () => {
@@ -197,6 +292,10 @@ class Jeu {
       this.reglages.inverser = inv.checked;
       this._sauverReglages();
     });
+    aide.addEventListener("change", () => {
+      this.reglages.aideVisee = aide.checked;
+      this._sauverReglages();
+    });
     tact.addEventListener("change", () => {
       this.reglages.tactile = tact.checked;
       this._sauverReglages();
@@ -211,17 +310,38 @@ class Jeu {
     this._cablesTactile();
 
     // Filet de sécurité : le premier contact active le mode tactile,
-    // même si la détection de l'appareil s'est trompée.
+    // sauf si l'utilisateur l'a explicitement désactivé.
     document.addEventListener("touchstart", () => {
-      if (!this.tactile) this._activerTactile();
+      if (this.tactile) return;
+      const coarse = window.matchMedia("(pointer: coarse)").matches;
+      // Sur un PC portable tactile, le pointeur principal est fin : on ne
+      // bascule pas tout le jeu en mode mobile pour un simple contact.
+      if (!window.__tactileForce && !coarse) return;
+      // Sur un téléphone, même si un ancien réglage disait « tactile:false »,
+      // le contact doit rendre le jeu jouable. On mémorise la correction.
+      this.reglages.tactile = true;
+      this._sauverReglages();
+      this._activerTactile();
     }, { passive: true });
 
     document.addEventListener("pointerlockchange", () => {
       if (!this.entrees || this.tactile) return;
-      if (!document.pointerLockElement && this.etat === ETATS.JEU) this._pause();
+      const verrouille = document.pointerLockElement === this.canvas;
+      // Un événement « déverrouillé » alors qu'on ne l'était pas déjà ne doit
+      // pas mettre le jeu en pause (cas des navigateurs mobiles qui refusent
+      // ou simulent le pointer lock).
+      if (this._etaitVerrouille && !verrouille && this.etat === ETATS.JEU) this._pause("pointerlock");
+      this._etaitVerrouille = verrouille;
     });
 
-    window.addEventListener("blur", () => { if (this.etat === ETATS.JEU) this._pause(); });
+    window.addEventListener("blur", () => {
+      // Sur téléphone, un simple contact peut faire perdre le focus à la page
+      // (barre d'adresse, plein écran) : on ne met pas en pause le mode tactile.
+      if (this.etat === ETATS.JEU && !this.tactile) this._pause("blur");
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && this.etat === ETATS.JEU) this._pause("visibilite");
+    });
     window.addEventListener("resize", () => this._verifierOrientation());
     window.addEventListener("orientationchange", () => setTimeout(() => this._verifierOrientation(), 200));
 
@@ -245,25 +365,62 @@ class Jeu {
     window.addEventListener("unhandledrejection", (e) => this._erreur(e.reason?.message || String(e.reason)));
   }
 
-  desactiverTactile() {
-    this.tactile = false;
-    if (this.entrees) { this.entrees.tactile = false; this.entrees.tirGeste = false; }
+  _majBoutonTactile() {
+    const el = $("btn-tactile");
+    if (!el) return;
+    const dispo = (navigator.maxTouchPoints || 0) > 0 || "ontouchstart" in window;
+    el.classList.toggle("cache", !dispo || this.tactile);
+  }
+
+  _afficherCommandesTactiles() {
+    $("tactile").classList.remove("cache");
+    $("hud").classList.add("tactile");
+  }
+
+  _masquerCommandesTactiles() {
     $("tactile").classList.add("cache");
     $("hud").classList.remove("tactile");
+  }
+
+  desactiverTactile() {
+    this.tactile = false;
+    if (this.entrees) {
+      this.entrees.tactile = false;
+      this.entrees.reinitialiserTactile();
+    }
+    document.body.classList.remove("tactile");
+    this._masquerCommandesTactiles();
+    const cb = $("reg-tactile");
+    if (cb) cb.checked = false;
+    $("aide-clavier")?.classList.remove("cache");
+    $("aide-tactile")?.classList.add("cache");
+    this._majBoutonTactile();
+    this._majTutoMode();
     this._verifierOrientation();
   }
 
   _activerTactile() {
     this.tactile = true;
-    if (this.entrees) this.entrees.tactile = true;
-    this.entrees?.relacherVerrou();
-    if (!this._reglagesSauves) this._appliquerQualite("basse");
-    if (this.etat === ETATS.JEU) {
-      $("tactile").classList.remove("cache");
-      $("hud").classList.add("tactile");
-      $("stick-base").classList.add("repos");
-      this._verifierOrientation();
+    if (this.entrees) {
+      this.entrees.tactile = true;
+      this.entrees.reinitialiserTactile();
     }
+    this.entrees?.relacherVerrou();
+    document.body.classList.add("tactile");
+    if (!this._reglagesSauves) {
+      this.reglages.qualite = "basse";
+      const q = $("reg-qualite");
+      if (q) q.value = "basse";
+      this._appliquerQualite("basse");
+    }
+    const cb = $("reg-tactile");
+    if (cb) cb.checked = true;
+    $("aide-clavier")?.classList.add("cache");
+    $("aide-tactile")?.classList.remove("cache");
+    this._majBoutonTactile();
+    this._majTutoMode();
+    if (this.etat === ETATS.JEU) this._afficherCommandesTactiles();
+    this._verifierOrientation();
   }
 
   _afficherDiagnostic() {
@@ -285,6 +442,10 @@ class Jeu {
         `densité : ${window.devicePixelRatio}`,
         `WebGL2 : ${oui(gl)}`,
         `état : ${this.etat}`,
+        `raison pause : ${this._raisonPause || "-"}`,
+        `fps : ${(this._dernierFps || 0).toFixed(0)}`,
+        `résolution : ${Math.round((this._resScale || 1) * 100)} %`,
+        `aide visée : ${oui(this.reglages.aideVisee !== false)}`,
         `ui tactile : ${oui(!$("tactile").classList.contains("cache"))}`,
         `agents : ${navigator.userAgent.slice(0, 46)}`,
       ].join("\n");
@@ -295,38 +456,80 @@ class Jeu {
   }
 
   _cablesTactile() {
-    const tir = $("t-btn-tir"), viser = $("t-btn-viser");
-    const maintenir = (el, fn) => {
-      el.addEventListener("touchstart", (e) => { e.preventDefault(); fn(true); el.classList.add("actif"); }, { passive: false });
-      el.addEventListener("touchend", (e) => { e.preventDefault(); fn(false); el.classList.remove("actif"); }, { passive: false });
-      el.addEventListener("touchcancel", () => { fn(false); el.classList.remove("actif"); });
+    const tir = $("t-btn-tir");
+    const recharger = $("t-btn-recharger");
+    const pause = $("t-btn-pause");
+
+    const maintenir = (el, onDown, onUp) => {
+      if (!el) return;
+      let actif = false;
+      const relacher = () => {
+        if (!actif) return;
+        actif = false;
+        el.classList.remove("actif");
+        onUp?.();
+      };
+      el.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        e.preventDefault();
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        actif = true;
+        el.classList.add("actif");
+        onDown?.();
+      });
+      el.addEventListener("pointerup", relacher);
+      el.addEventListener("pointercancel", relacher);
+      el.addEventListener("lostpointercapture", relacher);
     };
-    maintenir(tir, (on) => { this.entrees.tactileTir = on; });
-    maintenir(viser, (on) => { if (on) this.entrees.tactileVise = !this.entrees.tactileVise; });
 
-    $("t-btn-pause").addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      this._pause();
-    }, { passive: false });
+    maintenir(tir,
+      () => { this.entrees.tactileTir = true; },
+      () => { this.entrees.tactileTir = false; });
 
-    $("t-btn-recharger").addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      this.arme?.recharger();
-      this.audio?.interface();
-    }, { passive: false });
+    if (recharger) {
+      recharger.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        this.arme?.recharger();
+        this.audio?.interface();
+      });
+    }
+    if (pause) {
+      pause.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        this._pause("bouton");
+      });
+    }
+  }
 
-    $("t-btn-saut").addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      this.entrees.touches.add("Space");
-      setTimeout(() => this.entrees.touches.delete("Space"), 180);
-    }, { passive: false });
+  _pleinEcran() {
+    const el = document.documentElement;
+    if (typeof el.requestFullscreen !== "function" || document.fullscreenElement) return;
+    el.requestFullscreen()
+      .then(() => {
+        if (screen.orientation?.lock) screen.orientation.lock("landscape").catch(() => {});
+      })
+      .catch(() => {});
   }
 
   _verifierOrientation() {
-    if (!this.tactile) return;
-    // On ne bloque plus : en portrait, un simple bandeau conseille le paysage.
     const portrait = window.innerHeight > window.innerWidth;
-    $("paysage").classList.toggle("cache", !portrait || this.etat !== ETATS.JEU);
+    document.body.classList.toggle("tactile", this.tactile);
+    if (!this.tactile) {
+      $("orientation")?.classList.add("cache");
+      return;
+    }
+    const enJeu = this.etat === ETATS.JEU || this.etat === ETATS.PAUSE;
+    $("orientation")?.classList.toggle("cache", !(portrait && enJeu));
+
+    if (portrait && this.etat === ETATS.JEU) {
+      // Mise en pause due à l'orientation : on reprendra tout seul quand le
+      // téléphone sera revenu en paysage (utile pendant le passage plein écran).
+      this._pause("orientation");
+      return;
+    }
+    if (!portrait && this.etat === ETATS.PAUSE && this._pauseOrigineOrientation) {
+      this._reprendre();
+    }
   }
 
   _erreur(message) {
@@ -339,6 +542,10 @@ class Jeu {
   _appliquerQualite(nom) {
     const q = CONFIG.rendu.qualite[nom] || CONFIG.rendu.qualite.normale;
     this.qualite = q;
+    this.reglages.qualite = nom;
+    this._resScale = 1;
+    const sel = $("reg-qualite");
+    if (sel && sel.value !== nom) sel.value = nom;
     this.renderer.shadowMap.enabled = q.ombres;
     this.scene.traverse((o) => {
       if (o.isMesh && o.material) {
@@ -355,13 +562,16 @@ class Jeu {
     this._afficherVoile("accueil");
     $("hud").classList.add("cache");
     this.entrees?.relacherVerrou();
+    this.entrees?.reinitialiserTactile();
     this.audio.reprendre();
     this.audio.suspendre();
     this.joueur?.reinitialiser();
     this.ennemis?.nettoyer();
     this.arme?.reinitialiser();
     this.vague = 1; this.score = 0; this.elimines = 0; this.tempsPartie = 0;
-    $("tactile").classList.add("cache");
+    this._masquerCommandesTactiles();
+    this._majRecordAccueil();
+    this._verifierOrientation();
   }
 
   _lancerPartie() {
@@ -371,6 +581,7 @@ class Jeu {
     this.joueur.reinitialiser();
     this.ennemis.nettoyer();
     this.arme.reinitialiser();
+    this.monde.reinitialiserLampadaires();
     this.vague = 1;
     this.score = 0;
     this.elimines = 0;
@@ -379,55 +590,124 @@ class Jeu {
     this._attenteFin = 1.6;
     this._derniereVie = CONFIG.joueur.vieMax;
     this._dernierElimines = 0;
+    this._resScale = 1;
+    this._adaptTemps = 0;
+    this._adaptImages = 0;
     this.journal = [];
     $("journal").innerHTML = "";
     this.audio.demarrer();
     this.audio.reprendre();
+    this.entrees.reinitialiserTactile();
     if (this.tactile) {
-      $("tactile").classList.remove("cache");
-      $("hud").classList.add("tactile");
-      $("stick-base").classList.add("repos");
-      this._verifierOrientation();
-      this.entrees.tactileVise = false;
-      this.entrees.tactileTir = false;
-      this.entrees.tirGeste = false;
+      this._afficherCommandesTactiles();
+      this.arme.aideVisee = this.reglages.aideVisee !== false;
+      this._pleinEcran();
       setTimeout(() => {
         if (this.etat === ETATS.JEU) {
-          this._message("GLISSE POUR VISER\nDOUBLE-TAPE POUR TIRER", { petit: true, duree: 3.5 });
+          this._message("FLÈCHES POUR SE DÉPLACER\nGLISSE POUR VISER\nTAPE POUR TIRER",
+            { petit: true, duree: 4.5 });
         }
       }, 2400);
     } else {
+      this.arme.aideVisee = false;
       this.entrees.demanderVerrou();
     }
     this.ennemis.lancerVague(1);
     this._message("VAGUE 1", { petit: false, duree: 2.2 });
     this.audio.vague();
     this._majHud();
+    this._verifierOrientation();
   }
 
-  _pause() {
+  _pause(origine = "manuelle") {
     if (this.etat !== ETATS.JEU) return;
     this.etat = ETATS.PAUSE;
+    this._raisonPause = origine;
+    this._pauseOrigineOrientation = origine === "orientation";
     this._afficherVoile("pause");
-    $("tactile").classList.add("cache");
+    this._masquerCommandesTactiles();
     this.entrees.relacherVerrou();
     this.entrees.touches.clear();
     this.entrees.gauche = this.entrees.droite = false;
+    this.entrees.reinitialiserTactile();
     this.audio.suspendre();
+    this._verifierOrientation();
   }
 
   _reprendre() {
     if (!this.joueur) return;
+    if (this.tactile && window.innerHeight > window.innerWidth) {
+      this._verifierOrientation();
+      return;
+    }
+    this._pauseOrigineOrientation = false;
     this._masquerVoiles();
     this.etat = ETATS.JEU;
     this.audio.reprendre();
-    if (!this.tactile) this.entrees.demanderVerrou();
+    this.entrees.reinitialiserTactile();
+    if (this.tactile) this._afficherCommandesTactiles();
+    else this.entrees.demanderVerrou();
+    this._verifierOrientation();
+  }
+
+  /* ------------------------------------------------------------ mode d'emploi */
+  _chargerTuto() {
+    try {
+      this._tutoVu = localStorage.getItem(CLE_TUTO_VU) === "1";
+      this._tutoToujours = localStorage.getItem(CLE_TUTO_TOUJOURS) === "1";
+    } catch (e) {
+      this._tutoVu = false;
+      this._tutoToujours = false;
+    }
+  }
+
+  _sauverTuto() {
+    try {
+      localStorage.setItem(CLE_TUTO_VU, this._tutoVu ? "1" : "0");
+      localStorage.setItem(CLE_TUTO_TOUJOURS, this._tutoToujours ? "1" : "0");
+    } catch (e) { /* ignore */ }
+  }
+
+  _majTutoMode() {
+    $("tuto-etapes-tactile")?.classList.toggle("cache", !this.tactile);
+    $("tuto-etapes-clavier")?.classList.toggle("cache", this.tactile);
+  }
+
+  _demanderLancer() {
+    if (!this._tutoVu || this._tutoToujours) {
+      this._ouvrirTuto();
+      return;
+    }
+    this._lancerPartie();
+  }
+
+  _ouvrirTuto() {
+    this.etat = ETATS.ACCUEIL;
+    this._afficherVoile("tuto");
+    this.entrees?.relacherVerrou();
+    this.entrees?.reinitialiserTactile();
+    $("tuto-toujours").checked = this._tutoToujours;
+    this._majTutoMode();
+    this._verifierOrientation();
+  }
+
+  _fermerTuto() {
+    this._afficherVoile("accueil");
+    this.etat = ETATS.ACCUEIL;
+    this._verifierOrientation();
+  }
+
+  _lancerDepuisTuto() {
+    this._tutoVu = true;
+    this._sauverTuto();
+    this._lancerPartie();
   }
 
   _ouvrirReglages(depuis) {
     this._depuisReglages = depuis;
     this._afficherVoile("reglages");
     this.entrees?.relacherVerrou();
+    this.entrees?.reinitialiserTactile();
   }
 
   _fermerReglages() {
@@ -436,23 +716,39 @@ class Jeu {
   }
 
   _afficherVoile(id) {
-    ["accueil", "reglages", "pause", "fin"].forEach((n) => $(n).classList.toggle("actif", n === id));
+    ["accueil", "tuto", "reglages", "pause", "fin"].forEach((n) => $(n).classList.toggle("actif", n === id));
   }
 
   _masquerVoiles() {
-    ["accueil", "reglages", "pause", "fin"].forEach((n) => $(n).classList.remove("actif"));
+    ["accueil", "tuto", "reglages", "pause", "fin"].forEach((n) => $(n).classList.remove("actif"));
   }
 
   _terminer() {
     this.etat = ETATS.FIN;
     this._afficherVoile("fin");
+    this._masquerCommandesTactiles();
     this.entrees.relacherVerrou();
-    $("fin-vagues").textContent = String(this.vague - 1);
+    this.entrees.reinitialiserTactile();
+    this._verifierOrientation();
+
+    const nouveauRecord = this.score > this._record;
+    if (nouveauRecord) {
+      this._record = this.score;
+      this._sauverRecord();
+    }
+
+    $("fin-vagues").textContent = String(Math.max(0, this.vague - 1));
     $("fin-elimines").textContent = String(this.elimines);
     $("fin-score").textContent = String(this.score).padStart(4, "0");
     $("fin-temps").textContent = this._chrono();
     $("fin-titre").textContent = "TU ES TOMBÉ";
-    $("fin-surtitre").textContent = "OPÉRATION TERMINÉE";
+    $("fin-surtitre").textContent = nouveauRecord ? "NOUVEAU RECORD" : "OPÉRATION TERMINÉE";
+    const rec = $("fin-record");
+    if (rec) {
+      rec.textContent = String(this._record).padStart(4, "0");
+      rec.classList.toggle("nouveau", nouveauRecord);
+    }
+    this._vibrer([28, 40, 28]);
     this.audio.suspendre();
   }
 
@@ -494,17 +790,28 @@ class Jeu {
     this._directionTimer = setTimeout(() => el.classList.remove("joue"), 700);
   }
 
+  _vibrer(motif) {
+    if (!this.tactile || !navigator.vibrate) return;
+    try { navigator.vibrate(motif); } catch (e) { /* certains navigateurs refusent */ }
+  }
+
   _surTouche(tete) {
     const m = $("marqueur-touche");
     m.classList.remove("joue");
     void m.offsetWidth;
     m.classList.add("joue");
+    const maintenant = performance.now();
+    if (maintenant - this._vibrationTimer > 55) {
+      this._vibrer(tete ? 18 : 9);
+      this._vibrationTimer = maintenant;
+    }
   }
 
   _surElimination(tete) {
     this.elimines++;
     this.score += tete ? 150 : 100;
     this._journal(tete ? "☠ <b>HEADSHOT</b> — +150" : "☠ hostile neutralisé — +100");
+    this._vibrer(tete ? 30 : 18);
   }
 
   _chrono() {
@@ -521,8 +828,71 @@ class Jeu {
     $("perf").textContent =
       `fps ${String(fps).padStart(3)}   ${(1000 / Math.max(1, fps)).toFixed(1)} ms\n` +
       `appels ${st.appels}  triangles ${(st.triangles / 1000).toFixed(0)}k\n` +
-      `qualité ${this.reglages.qualite}`;
+      `qualité ${this.reglages.qualite}  résolution ${Math.round((this._resScale || 1) * 100)} %`;
     this._perfTemps = 0; this._perfImages = 0;
+  }
+
+  // Résolution adaptative : on descend doucement si le téléphone peine.
+  _majFps(dt) {
+    this._adaptTemps += dt;
+    this._adaptImages++;
+    if (this._adaptTemps < 2.0) return;
+    const fps = this._adaptImages / this._adaptTemps;
+    this._dernierFps = fps;
+    this._adaptTemps = 0;
+    this._adaptImages = 0;
+    if (!this.tactile || this.etat !== ETATS.JEU) return;
+    const avant = this._resScale;
+    if (fps < 27 && this._resScale > 0.6) this._resScale = Math.max(0.6, this._resScale - 0.12);
+    else if (fps > 52 && this._resScale < 1) this._resScale = Math.min(1, this._resScale + 0.08);
+    if (Math.abs(this._resScale - avant) > 0.001) this._redimensionner();
+  }
+
+  _majIndicateurHostile() {
+    const el = $("indicateur-hostile");
+    if (!el) return;
+    const dernier = this.ennemis.restants === 1 && this.ennemis.vivants === 1 && this.joueur?.vivant;
+    if (!dernier) {
+      el.classList.add("cache");
+      return;
+    }
+    const e = this.ennemis.liste.find((x) => x.vivant);
+    if (!e) {
+      el.classList.add("cache");
+      return;
+    }
+
+    this.camera.updateMatrixWorld();
+    const cible = new THREE.Vector3(e.groupe.position.x, e.groupe.position.y + 1.2, e.groupe.position.z);
+    const local = this.camera.worldToLocal(cible.clone());
+    let x, y;
+
+    if (local.z < 0) {
+      const ndc = cible.clone().project(this.camera);
+      x = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+      y = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+    } else {
+      const angle = (Math.abs(local.x) < 0.001 && Math.abs(local.y) < 0.001)
+        ? -Math.PI / 2
+        : Math.atan2(local.y, local.x);
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      x = cx + Math.cos(angle) * (cx - 54);
+      y = cy - Math.sin(angle) * (cy - 54);
+    }
+
+    const marge = 54;
+    x = Math.max(marge, Math.min(window.innerWidth - marge, x));
+    y = Math.max(marge, Math.min(window.innerHeight - marge, y));
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+
+    const distance = Math.hypot(
+      e.groupe.position.x - this.joueur.pieds.x,
+      e.groupe.position.z - this.joueur.pieds.z
+    );
+    $("indicateur-hostile-distance").textContent = `${Math.round(distance)} m`;
+    el.classList.remove("cache");
   }
 
   _majHud() {
@@ -538,7 +908,8 @@ class Jeu {
     $("hud-chargeur").classList.toggle("vide", a.chargeur === 0);
     $("hud-reserve").textContent = String(a.reserve);
     $("hud-vague").textContent = String(this.vague);
-    $("hud-restants").textContent = `${this.ennemis.vivants} hostile${this.ennemis.vivants > 1 ? "s" : ""}`;
+    const restants = this.ennemis.restants;
+    $("hud-restants").textContent = `${restants} hostile${restants > 1 ? "s" : ""}`;
     $("hud-score").textContent = String(this.score).padStart(4, "0");
     $("hud-temps").textContent = this._chrono();
     $("hud-arme").textContent = CONFIG.arme.nom;
@@ -553,7 +924,8 @@ class Jeu {
 
     if (this.etat === ETATS.JEU && this.joueur) {
       this._maj(dt);
-      this.postfx.render(this.scene, this.camera, this._temps);
+      this.postfx.render(this.scene, this.camera, this._temps,
+        this.arme ? { scene: this.arme.sceneArme, camera: this.arme.cameraArme } : null);
     } else if (this.etat === ETATS.ACCUEIL && this.monde) {
       this._cameraAccueil(dt);
       this.postfx.render(this.scene, this.camera, this._temps);
@@ -579,22 +951,32 @@ class Jeu {
   _maj(dt) {
     const j = this.joueur;
     const e = this.entrees;
+    e.majTactile();
     const souris = e.consommerSouris();
+    const tirTape = e.consommerTirTape();
 
     if (j.vivant) {
-      if (e.verrouille) j.appliquerSouris(souris.dx, souris.dy, this.reglages.sensibilite / 100, this.reglages.inverser);
+      if (e.verrouille || this.tactile) {
+        const sensibilite = this.tactile ? this.reglages.sensibiliteTactile : this.reglages.sensibilite;
+        j.appliquerSouris(souris.dx, souris.dy, sensibilite / 100, this.reglages.inverser);
+      }
+      this.arme.aideVisee = this.tactile && this.reglages.aideVisee !== false;
       j.update(dt, e, { peutBouger: true });
       this.arme.update(dt, j, {
-        tir: (e.gauche && e.verrouille) || e.tactileTir || e.tirGeste,
-        vise: (e.droite && e.verrouille) || e.tactileVise,
+        tir: (e.gauche && e.verrouille) || e.tactileTir || e.tirGeste || tirTape,
+        vise: (e.droite && e.verrouille) && !this.tactile,
         souris,
       }, this.monde, this.ennemis);
     } else {
+      e.tactileTir = false;
+      e.tirGeste = false;
+      e.tirTape = false;
       j.update(dt, e, { peutBouger: false });
     }
 
     this.monde.animer(dt, this._temps);
     this.ennemis.update(dt);
+    this._majIndicateurHostile();
 
     if (j.vivant) {
       this.tempsPartie += dt;
@@ -638,6 +1020,7 @@ class Jeu {
 
     this._majHud();
     this._majPerf(dt);
+    this._majFps(dt);
 
     if (!j.vivant && this.etat === ETATS.JEU) {
       this._attenteFin = (this._attenteFin ?? 1.6) - dt;
@@ -656,11 +1039,11 @@ function supporteWebGL2() {
 
 function pointeurGrossier() {
   try {
-    // Détection volontairement large : certains téléphones rapportent
-    // « pointer: fine » alors qu'ils n'ont pas de souris.
-    if ((navigator.maxTouchPoints || 0) > 0) return true;
-    if ("ontouchstart" in window) return true;
-    return window.matchMedia("(pointer: coarse)").matches;
+    // On regarde le pointeur PRINCIPAL. Sur un PC portable tactile, il est
+    // fin (souris) : on reste en mode clavier/souris. Sur un téléphone, même
+    // avec un stylet ou une souris secondaire, il reste grossier.
+    const grossier = window.matchMedia("(pointer: coarse)").matches;
+    return grossier && (navigator.maxTouchPoints || 0) > 0;
   } catch (e) { return false; }
 }
 

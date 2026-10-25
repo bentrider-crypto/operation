@@ -112,7 +112,10 @@ export class PostFX {
     this.quad.frustumCulled = false;
     this.scene.add(this.quad);
 
-    const options = { type: THREE.HalfFloatType, depthBuffer: false };
+    // En qualité basse (téléphone), on évite le HalfFloat : moins de bande
+    // passante et un rendu plus compatible avec les GPU mobiles.
+    const type = qualite.bloom === false ? THREE.UnsignedByteType : THREE.HalfFloatType;
+    const options = { type, depthBuffer: false };
     this.rtScene = new THREE.WebGLRenderTarget(2, 2, { ...options, depthBuffer: true });
     this.rtScene.texture.colorSpace = THREE.LinearSRGBColorSpace;
     this.rtA = new THREE.WebGLRenderTarget(2, 2, options);
@@ -145,6 +148,17 @@ export class PostFX {
       depthTest: false, depthWrite: false,
     });
 
+    // Matériau de composition sans bloom : créé une seule fois.
+    // (Avant, un ShaderMaterial neuf était fabriqué à chaque image en
+    // qualité basse, ce qui provoquait des à-coups et des fuites mémoire.)
+    this.matBas = new THREE.ShaderMaterial({
+      uniforms: { tScene: { value: this.rtScene.texture } },
+      vertexShader: VERTEX,
+      fragmentShader: `varying vec2 vUv; uniform sampler2D tScene;
+        void main(){ vec4 c = texture2D(tScene, vUv); gl_FragColor = vec4(pow(max(c.rgb,0.0), vec3(1.0/2.2)), 1.0); }`,
+      depthTest: false, depthWrite: false,
+    });
+
     this.largeur = 1; this.hauteur = 1;
     this.actif = true;
   }
@@ -172,7 +186,7 @@ export class PostFX {
     this.renderer.render(this.scene, this.camera);
   }
 
-  render(scene, camera, temps) {
+  render(scene, camera, temps, overlay = null) {
     const r = this.renderer;
     r.setRenderTarget(this.rtScene);
     r.clear();
@@ -180,15 +194,22 @@ export class PostFX {
     // Statistiques de la passe 3D (avant les passes plein écran).
     this.stats = { appels: r.info.render.calls, triangles: r.info.render.triangles };
 
+    // Modèle d'arme : rendu après le décor, avec la profondeur nettoyée.
+    // Il reste ainsi toujours devant les murs, sans les traverser visuellement.
+    if (overlay?.scene && overlay?.camera) {
+      const auto = r.autoClear;
+      try {
+        r.autoClear = false;
+        r.clearDepth();
+        r.render(overlay.scene, overlay.camera);
+      } finally {
+        r.autoClear = auto;
+      }
+    }
+
     if (!this.actif) {
-      this.quad.material = new THREE.ShaderMaterial({
-        uniforms: { tScene: { value: this.rtScene.texture } },
-        vertexShader: VERTEX,
-        fragmentShader: `varying vec2 vUv; uniform sampler2D tScene;
-          void main(){ vec4 c = texture2D(tScene, vUv); gl_FragColor = vec4(pow(max(c.rgb,0.0), vec3(1.0/2.2)), 1.0); }`,
-        depthTest: false, depthWrite: false,
-      });
-      this._pleinEcran(this.quad.material, null);
+      this.matBas.uniforms.tScene.value = this.rtScene.texture;
+      this._pleinEcran(this.matBas, null);
       r.setRenderTarget(null);
       return;
     }

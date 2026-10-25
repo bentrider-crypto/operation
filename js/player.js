@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261022e";
+import { CONFIG } from "./config.js?v=20261024h";
 
 /* =============================================================================
    Entrées clavier/souris + contrôleur du joueur (capsule contre boîtes AABB).
@@ -11,11 +11,15 @@ export class Entrees {
     this.touches = new Set();
     this.dx = 0; this.dy = 0;
     this.tactile = false;
-    this.axeX = 0; this.axeY = 0;      // joystick virtuel, -1..1
-    this.tactileTir = false;   // bouton TIR
-    this.tirGeste = false;     // double-tape sur l'écran
-    this.tactileVise = false;
-    this._dernierTap = 0;
+    this.axeX = 0; this.axeY = 0;      // pavé directionnel, -1..1
+    this.tactileTir = false;           // bouton TIR maintenu
+    this.tirGeste = false;             // doigt maintenu sur la zone de visée
+    this.tirTape = false;              // tap court, consommé par la boucle
+    this._appuiVue = false;
+    this._vueId = null;
+    this._vueDebut = 0;
+    this._vueBouge = false;
+    this._doigtsDir = new Map();
     this.gauche = false; this.droite = false;
     this.verrouille = false;
     this._écouteurs = {};
@@ -28,8 +32,13 @@ export class Entrees {
     });
     window.addEventListener("keyup", (e) => this.touches.delete(e.code));
 
-    window.addEventListener("blur", () => { this.touches.clear(); this.gauche = this.droite = false; });
-    document.addEventListener("visibilitychange", () => { if (document.hidden) this.touches.clear(); });
+    window.addEventListener("blur", () => {
+      this.touches.clear(); this.gauche = this.droite = false;
+      this.reinitialiserTactile();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) { this.touches.clear(); this.reinitialiserTactile(); }
+    });
 
     document.addEventListener("pointerlockchange", () => {
       this.verrouille = document.pointerLockElement === this.canvas;
@@ -61,95 +70,127 @@ export class Entrees {
   }
 
   // --- commandes tactiles ---------------------------------------------------
-  brancherStick(zone, base, pouce) {
-    let id = null, ox = 0, oy = 0;
-    const R = 52;
-    const poser = (t) => {
-      id = t.identifier; ox = t.clientX; oy = t.clientY;
-      const r = zone.getBoundingClientRect();
-      base.style.left = (ox - r.left) + "px";
-      base.style.top = (oy - r.top) + "px";
-      base.classList.remove("repos");
-      base.style.bottom = "auto";
-      base.classList.add("actif");
+  // Quatre flèches : un doigt par flèche, plusieurs directions possibles.
+  brancherDirections(zone) {
+    if (!zone) return;
+    const boutons = [...zone.querySelectorAll("[data-direction]")];
+    const actives = new Map(); // pointerId -> direction
+    const recalculer = () => {
+      const d = new Set(actives.values());
+      this.axeX = (d.has("droite") ? 1 : 0) - (d.has("gauche") ? 1 : 0);
+      this.axeY = (d.has("bas") ? 1 : 0) - (d.has("haut") ? 1 : 0);
     };
-    const rendre = (e) => {
-      e.preventDefault();
-      for (const t of e.changedTouches) {
-        if (t.identifier !== id) continue;
-        let dx = t.clientX - ox, dy = t.clientY - oy;
-        const d = Math.hypot(dx, dy);
-        if (d > R) { dx = dx / d * R; dy = dy / d * R; }
-        pouce.style.transform = `translate(${dx}px, ${dy}px)`;
-        this.axeX = dx / R;
-        this.axeY = dy / R;
-      }
-    };
-    const relacher = (e) => {
-      for (const t of e.changedTouches) {
-        if (t.identifier !== id) continue;
-        id = null; this.axeX = 0; this.axeY = 0;
-        pouce.style.transform = "";
-        base.classList.remove("actif");
-        base.style.left = ""; base.style.top = ""; base.style.bottom = "";
-        base.classList.add("repos");
-      }
-    };
-    zone.addEventListener("touchstart", (e) => { e.preventDefault(); if (id === null) poser(e.changedTouches[0]); }, { passive: false });
-    zone.addEventListener("touchmove", rendre, { passive: false });
-    zone.addEventListener("touchend", relacher);
-    zone.addEventListener("touchcancel", relacher);
+    for (const b of boutons) {
+      const appuyer = (e) => {
+        e.preventDefault();
+        b.classList.add("actif");
+        actives.set(e.pointerId, b.dataset.direction);
+        recalculer();
+      };
+      const relacher = (e) => {
+        b.classList.remove("actif");
+        actives.delete(e.pointerId);
+        recalculer();
+      };
+      b.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        try { b.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        appuyer(e);
+      });
+      b.addEventListener("pointerup", relacher);
+      b.addEventListener("pointercancel", relacher);
+      b.addEventListener("lostpointercapture", relacher);
+    }
   }
 
-  // Glisser n'importe où = viser ; deux tapes rapides = tirer.
+  // Glisser sur la moitié droite = viser ; tap court = tirer ;
+  // maintien immobile = tir continu.
   brancherVue(canvas) {
-    let id = null, sx = 0, sy = 0, lx = 0, ly = 0, debut = 0, bouge = false;
-    const DELAI_DOUBLE = 320;   // ms entre deux tapes
-    const SEUIL_GLISSE = 12;    // px avant de considérer que c'est un glissement
+    const SEUIL_GLISSE = 10;    // px avant de considérer que c'est un glissement
+    const DUREE_TAP = 280;      // ms
 
     canvas.addEventListener("touchstart", (e) => {
+      if (this._vueId !== null) return;
       const t = e.changedTouches[0];
-      if (id !== null) return;
-      id = t.identifier;
-      sx = lx = t.clientX; sy = ly = t.clientY;
-      debut = performance.now(); bouge = false;
-
-      if (debut - this._dernierTap < DELAI_DOUBLE) {
-        // Deuxième tape : on tire tant que le doigt reste posé.
-        this.tirGeste = true;
-        this._dernierTap = 0;
-        if (navigator.vibrate) navigator.vibrate(12);
-      }
+      if (!t) return;
+      this._vueId = t.identifier;
+      this._vueX = this._vueLX = t.clientX;
+      this._vueY = this._vueLY = t.clientY;
+      this._vueDebut = performance.now();
+      this._vueBouge = false;
+      this._appuiVue = true;
     }, { passive: true });
 
     canvas.addEventListener("touchmove", (e) => {
       for (const t of e.changedTouches) {
-        if (t.identifier !== id) continue;
-        if (Math.hypot(t.clientX - sx, t.clientY - sy) > SEUIL_GLISSE) bouge = true;
-        this.dx += (t.clientX - lx) * 1.8;
-        this.dy += (t.clientY - ly) * 1.8;
-        lx = t.clientX; ly = t.clientY;
+        if (t.identifier !== this._vueId) continue;
+        if (Math.hypot(t.clientX - this._vueX, t.clientY - this._vueY) > SEUIL_GLISSE) this._vueBouge = true;
+        this.dx += (t.clientX - this._vueLX) * 1.6;
+        this.dy += (t.clientY - this._vueLY) * 1.6;
+        this._vueLX = t.clientX; this._vueLY = t.clientY;
       }
     }, { passive: true });
 
     const fin = (e) => {
       for (const t of e.changedTouches) {
-        if (t.identifier !== id) continue;
-        const duree = performance.now() - debut;
-        if (!bouge && duree < 300 && !this.tirGeste) this._dernierTap = performance.now();
+        if (t.identifier !== this._vueId) continue;
+        const duree = performance.now() - this._vueDebut;
+        if (!this._vueBouge && duree < DUREE_TAP) {
+          this.tirTape = true;
+          try { navigator.vibrate?.(8); } catch (err) { /* ignore */ }
+        }
+        this._appuiVue = false;
         this.tirGeste = false;
-        id = null;
+        this._vueId = null;
       }
     };
     canvas.addEventListener("touchend", fin);
     canvas.addEventListener("touchcancel", fin);
   }
 
+  // À appeler à chaque image : transforme un maintien immobile en tir continu.
+  majTactile() {
+    if (this._appuiVue && !this._vueBouge &&
+        performance.now() - this._vueDebut > 320) {
+      this.tirGeste = true;
+    }
+  }
+
+  consommerTirTape() {
+    const v = this.tirTape;
+    this.tirTape = false;
+    return v;
+  }
+
+  reinitialiserTactile() {
+    this.axeX = 0; this.axeY = 0;
+    this.tactileTir = false;
+    this.tirGeste = false;
+    this.tirTape = false;
+    this._appuiVue = false;
+    this._vueId = null;
+    this._vueBouge = false;
+    this._doigtsDir?.clear();
+    this.dx = 0; this.dy = 0;
+    document.querySelectorAll("#dpad .actif, #t-btn-tir.actif")
+      .forEach((el) => el.classList.remove("actif"));
+  }
+
   sur(nom, fn) { (this._écouteurs[nom] ||= []).push(fn); }
   _émettre(nom, v) { (this._écouteurs[nom] || []).forEach((f) => f(v)); }
 
   demanderVerrou() {
-    if (!this.verrouille) this.canvas.requestPointerLock?.();
+    if (this.verrouille) return;
+    try {
+      const demande = this.canvas.requestPointerLock?.();
+      // Les navigateurs récents renvoient une promesse : un refus ne doit
+      // pas afficher l'écran d'erreur fatal du jeu.
+      if (demande && typeof demande.catch === "function") {
+        demande.catch(() => this._émettre("verrou", false));
+      }
+    } catch (e) {
+      this._émettre("verrou", false);
+    }
   }
   relacherVerrou() { if (this.verrouille) document.exitPointerLock?.(); }
 
@@ -251,8 +292,7 @@ export class Joueur {
       const dirX = longueur > 0 ? vx / longueur : 0;
       const dirZ = longueur > 0 ? vz / longueur : 0;
 
-      this.sprint = (entrees.estAppuyee("ShiftLeft", "ShiftRight") && avant === 1
-        || (entrees.tactile && entrees.axeY < -0.85)) && !this.accroupi;
+      this.sprint = entrees.estAppuyee("ShiftLeft", "ShiftRight") && avant === 1 && !this.accroupi;
       const voulu = this.accroupi ? c.vitesseAccroupi : this.sprint ? c.vitesseSprint : c.vitesseMarche;
 
       // Direction monde à partir du lacet.

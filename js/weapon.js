@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261022e";
+import { CONFIG } from "./config.js?v=20261024h";
 
 /* =============================================================================
    Arme à la première personne : modèle géométrique, recul, visée, rechargement
@@ -17,8 +17,21 @@ export class Arme {
     this.audio = audio;
 
     this.groupe = new THREE.Group();
-    camera.add(this.groupe);
-    scene.add(camera);
+
+    // Le modèle d'arme est rendu dans une scène séparée, après le décor et
+    // avec un tampon de profondeur nettoyé : il ne peut plus traverser les murs.
+    this.sceneArme = new THREE.Scene();
+    this.cameraArme = new THREE.PerspectiveCamera(75, 1, 0.01, 12);
+    this.sceneArme.add(this.groupe);
+
+    // Éclairage dédié au modèle, dans la même veine que la scène principale.
+    this.sceneArme.add(new THREE.HemisphereLight(0x44687d, 0x2a2219, 1.75));
+    const luneArme = new THREE.DirectionalLight(0xcfe2f0, 2.4);
+    luneArme.position.set(-4, 5, 3);
+    this.sceneArme.add(luneArme);
+    const faceArme = new THREE.DirectionalLight(0x93b6cc, 0.9);
+    faceArme.position.set(2, 2, 4);
+    this.sceneArme.add(faceArme);
 
     this._construire();
     this._construireEffets();
@@ -40,8 +53,13 @@ export class Arme {
 
     this.raycaster = new THREE.Raycaster();
     this.raycaster.far = CONFIG.arme.portee;
+    this._rayonAide = new THREE.Raycaster();
+    this.aideVisee = false;
     this._origine = new THREE.Vector3();
     this._direction = new THREE.Vector3();
+    this._tmpMonde = new THREE.Vector3();
+    this._douilleLocale = new THREE.Vector3(0.03, 0.03, -0.12);
+    this.onLampadaire = null;
     this._viseur = new THREE.Vector2(0, 0);
     this._effets = [];
     this._decals = [];
@@ -169,6 +187,14 @@ export class Arme {
     this._geoEtincelle.setAttribute("position", new THREE.BufferAttribute(new Float32Array(12 * 3), 3));
   }
 
+  // Point local du modèle (espace caméra) -> coordonnées monde.
+  _pointMonde(local, cible = this._tmpMonde) {
+    this.groupe.updateMatrix();
+    cible.copy(local).applyMatrix4(this.groupe.matrix);
+    this.camera.updateMatrixWorld();
+    return cible.applyMatrix4(this.camera.matrixWorld);
+  }
+
   /* ------------------------------------------------------------------- tir */
   get chargeurPlein() { return this.etat.chargeur > 0; }
 
@@ -193,14 +219,16 @@ export class Arme {
     e.tirTenus++;
     this.audio?.tir();
 
+    this.camera.getWorldPosition(this._origine);
+    this.camera.getWorldDirection(this._direction);
+    if (this.aideVisee) this._viserAssiste(ennemis, monde);
+
     const dispersion = THREE.MathUtils.lerp(
       CONFIG.arme.dispersion,
       CONFIG.arme.dispersionVise,
       e.vise
     ) + Math.min(0.02, joueur.vitesseHorizontale * 0.0025) * (1 - e.vise * 0.7);
 
-    this.camera.getWorldPosition(this._origine);
-    this.camera.getWorldDirection(this._direction);
     this._direction.x += (Math.random() - 0.5) * dispersion;
     this._direction.y += (Math.random() - 0.5) * dispersion;
     this._direction.z += (Math.random() - 0.5) * dispersion;
@@ -211,10 +239,10 @@ export class Arme {
 
     const cibles = monde.meshes.concat(ennemis.meshesTir);
     const touches = this.raycaster.intersectObjects(cibles, false);
-    const hit = touches.find((t) => t.distance > 0.4);
+    // Pas de marge de 0,4 m : un mur tout proche doit arrêter la balle.
+    const hit = touches.find((t) => t.distance > 0.05);
 
-    const positionBouche = new THREE.Vector3();
-    this.bouche.getWorldPosition(positionBouche);
+    const positionBouche = this._pointMonde(this.bouche.position);
 
     if (hit) {
       const point = hit.point;
@@ -228,6 +256,13 @@ export class Arme {
         this.audio?.touche(tete);
         this.onTouche?.(tete);
       }
+      if (donnees?.lampadaire) {
+        const eteint = monde.eteindreLampadaire(donnees.lampadaire);
+        if (eteint) {
+          this.audio?.lampadaire();
+          this.onLampadaire?.(donnees.lampadaire);
+        }
+      }
     } else {
       const fin = this._origine.clone().addScaledVector(this._direction, this.porteeMax);
       this._tracer(positionBouche, fin);
@@ -236,6 +271,39 @@ export class Arme {
     this._douille();
     this._flash();
     this._recul(joueur, e.tirTenus);
+  }
+
+  // Aide tactile : si le réticule effleure un hostile visible, on incline
+  // légèrement la balle vers lui. Jamais à travers un mur.
+  _viserAssiste(ennemis, monde) {
+    if (!ennemis?.liste) return;
+    const dir = this._direction;
+    let meilleur = null;
+    let meilleurAngle = CONFIG.arme.aideVisee.cone;
+    const cible = new THREE.Vector3();
+    const vers = new THREE.Vector3();
+
+    for (const e of ennemis.liste) {
+      if (!e.vivant) continue;
+      cible.copy(e.groupe.position);
+      cible.y += 1.25;
+      vers.subVectors(cible, this._origine);
+      const distance = vers.length();
+      if (distance < 1 || distance > CONFIG.arme.aideVisee.portee) continue;
+      vers.divideScalar(distance);
+      const angle = Math.acos(THREE.MathUtils.clamp(dir.dot(vers), -1, 1));
+      if (angle >= meilleurAngle) continue;
+
+      this._rayonAide.set(this._origine, vers);
+      this._rayonAide.far = distance;
+      const obstacle = this._rayonAide.intersectObjects(monde.meshes, false)[0];
+      if (obstacle && obstacle.distance < distance - 0.4) continue;
+
+      meilleur = vers.clone();
+      meilleurAngle = angle;
+    }
+
+    if (meilleur) dir.lerp(meilleur, CONFIG.arme.aideVisee.force).normalize();
   }
 
   _flash() {
@@ -307,8 +375,7 @@ export class Arme {
     const geo = new THREE.CylinderGeometry(0.008, 0.008, 0.026, 6);
     const matiere = new THREE.MeshStandardMaterial({ color: 0xc9a34a, metalness: 1, roughness: 0.3 });
     const d = new THREE.Mesh(geo, matiere);
-    const p = new THREE.Vector3();
-    this.groupe.localToWorld(p.set(0.03, 0.03, -0.12));
+    const p = this._pointMonde(this._douilleLocale);
     d.position.copy(p);
     d.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
     this.scene.add(d);
@@ -358,6 +425,11 @@ export class Arme {
     const fovCible = THREE.MathUtils.lerp(75, CONFIG.arme.zoomVise, e.vise);
     this.camera.fov += (fovCible - this.camera.fov) * Math.min(1, dt * 12);
     this.camera.updateProjectionMatrix();
+
+    // La caméra du modèle d'arme suit le FOV et le format de l'écran.
+    this.cameraArme.fov = this.camera.fov;
+    this.cameraArme.aspect = this.camera.aspect;
+    this.cameraArme.updateProjectionMatrix();
 
     // Position de repos / visée.
     const cible = new THREE.Vector3().lerpVectors(this.base.position, this.base.vise, e.vise);

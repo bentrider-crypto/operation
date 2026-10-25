@@ -1,29 +1,52 @@
-# OPÉRATION — FPS WebGL pour raspi-web
+# OPÉRATION — jeu d'arcade mobile pour raspi-web
 
-Jeu de tir à la première personne, en une page, servi par Apache comme le reste du site.
-Aucune dépendance réseau : Three.js est vendorisé, toutes les textures sont générées au
-chargement, tout le son est synthétisé. Le jeu fonctionne donc même si la fibre tombe.
+Petit jeu de tir 3D à la première personne, jouable au doigt sur téléphone.
+Aucune dépendance réseau : Three.js est vendorisé, les textures sont générées au
+chargement, tout le son est synthétisé.
+
+Version mobile simplifiée : une arène, une arme, des vagues, un score et un record local.
 
 ## Contenu
 
 ```
 cod/
 ├── index.html        page du jeu (menus, HUD, import map)
-├── style.css         interface, menus, HUD
+├── style.css         interface, menus, HUD, commandes tactiles
 ├── lib/
 │   ├── three.module.js   Three.js 0.186.1 (vendorisé)
 │   └── three.core.js
 └── js/
     ├── config.js     réglages et équilibrage (un seul endroit à toucher)
-    ├── main.js       boucle, états de jeu, HUD, menus
+    ├── main.js       boucle, états de jeu, HUD, menus, orientation
     ├── world.js      niveau, lumières, ciel, collisionneurs
-    ├── player.js     entrées, déplacement, collisions, caméra
-    ├── weapon.js     modèle d'arme, tir, recul, effets
-    ├── enemies.js    hostiles, IA, vagues
+    ├── player.js     entrées clavier/tactile, déplacement, collisions
+    ├── weapon.js     arme, tir, aide à la visée, effets
+    ├── enemies.js    hostiles, IA, vagues, apparitions annoncées
     ├── postfx.js     bloom, vignette, grain, aberration
     ├── textures.js   textures procédurales (canvas)
     └── audio.js      sons synthétisés (WebAudio)
 ```
+
+## Commandes (téléphone / tablette)
+
+Le jeu se joue **en paysage**.
+
+- **Flèches** en bas à gauche : se déplacer.
+- **Glisser** le pouce droit sur l'image : viser.
+- **Tap court** sur la zone de visée : tirer une balle.
+- **Maintenir** le doigt immobile : tir continu.
+- **Bouton TIR** en bas à droite : tir continu en secours.
+- **RECH.** : recharger manuellement (le rechargement est aussi automatique).
+- **II** en haut à droite : pause.
+- **Plein écran** : bouton dans le menu et la pause (Android ; ignoré sur iPhone).
+
+Une aide discrète à la visée rapproche la balle d'un hostile visible. Elle se règle
+dans les réglages. La qualité passe automatiquement en « Basse » au premier lancement
+sur téléphone, et la résolution s'adapte si le jeu peine.
+
+Au premier lancement, un **mode d'emploi** s'affiche avant la partie. Le bouton
+**MODE D'EMPLOI** du menu permet de le revoir, et une case permet de l'afficher
+avant chaque partie.
 
 ## Commandes (clavier / souris)
 
@@ -39,92 +62,96 @@ cod/
 | R | recharger |
 | M | couper/rétablir le son |
 | Échap | pause |
-| F3 | compteur de performance (fps, ms, appels, triangles) |
+| F3 | compteur de performance |
 
-Réglages (sensibilité, volume, qualité, axe Y) conservés dans `localStorage`.
-
-## Commandes (téléphone / tablette)
-
-Le jeu démarre en mode tactile quand l'appareil n'a pas de pointeur fin.
-En paysage :
-- **glisser n'importe où** sur l'image pour viser (le canon suit le doigt) ;
-- **deux tapes rapides** pour tirer — maintenir le doigt après la seconde tape
-  entretient le tir ;
-- **joystick virtuel** à gauche pour se déplacer (il apparaît là où tu poses le pouce) ;
-- boutons **TIR**, **VISER**, **RECH.**, **SAUT** et **pause** en complément.
-
-La qualité passe automatiquement en « Basse » au premier lancement ; en portrait,
-le jeu demande de tourner l'appareil.
+Réglages (sensibilités, volume, qualité, axe Y, aide à la visée, tactile) conservés
+dans `localStorage`, ainsi que le record.
 
 ## Tester en local
 
 ```bash
-cd raspi-cod
+cd jeu-operation
 python3 -m http.server 8123
 # ouvrir http://127.0.0.1:8123/
 ```
 
 Un serveur est nécessaire : les modules ES ne se chargent pas en `file://`.
+Ajouter `?debug=1` pour afficher le diagnostic.
 
-## Déployer sur raspi-web
+## Staging sur raspi-web
 
-1. Copier le dossier dans la racine web du site (`/var/www/default/public/jeu/cod`) :
+Le staging est servi par un petit serveur Python sur l'interface Tailscale :
 
 ```bash
-rsync -av --delete \
-  --exclude 'qa' --exclude 'preview' --exclude 'integration' --exclude 'screens' \
-  ./ pi@raspi-web.local:/tmp/operation-cascade/
-ssh pi@raspi-web.local
-sudo mkdir -p /var/www/default/public/jeu/cod
-sudo rsync -a /tmp/operation-cascade/ /var/www/default/public/jeu/cod/
+# depuis le poste de travail
+rsync -a --delete --exclude '.git' ./ franck@raspi-web:~/jeu-staging/cod/
+
+# sur raspi-web
+systemctl --user restart jeu-staging.service   # ou systemd-run, voir plus bas
+```
+
+Adresse téléphone (Tailscale actif) : `http://100.87.78.97:8123/cod/`
+
+## Déployer en production
+
+Sauvegarder puis copier dans la racine web :
+
+```bash
+ssh franck@raspi-web
+sudo cp -a /var/www/default/public/jeu/cod \
+          /var/www/default/public/jeu/cod.bak-$(date +%F-%H%M)
+sudo rsync -a --delete --exclude '.git' ~/jeu-staging/cod/ \
+          /var/www/default/public/jeu/cod/
 sudo chown -R root:www-data /var/www/default/public/jeu/cod
 ```
 
-2. Ajouter la passerelle dans `CASCADE` (`/var/www/default/public/jeu/index.html`).
-   La version déjà patchée est fournie : `integration/cascade-patche.html`.
-   Elle ne change que trois choses :
-
-   - un bloc CSS `.bouton-lien` avant `</style>` ;
-   - un lien `<a class="bouton-lien" href="cod/">Opération ▸</a>` sous le bouton « Jouer » ;
-   - un lien « Opération Cascade » dans le pied de page.
-
-```bash
-sudo cp integration/cascade-patche.html /var/www/default/public/jeu/index.html
-sudo chown root:www-data /var/www/default/public/jeu/index.html
-```
-
-3. Ouvrir `https://raspi-web.local/jeu/` puis « Opération ▸ ».
+Ouvrir ensuite `https://franck.estingoy.fr/jeu/cod/` (ou `https://raspi-web.local/jeu/cod/`).
 
 ### Revenir en arrière
 
 ```bash
 sudo rm -rf /var/www/default/public/jeu/cod
-# et restaurer l'ancienne page CASCADE depuis une sauvegarde
+sudo mv /var/www/default/public/jeu/cod.bak-AAAAMMJJ-HHMM \
+        /var/www/default/public/jeu/cod
 ```
 
-## Qualité — ce que c'est, ce que ce n'est pas
+## Ce que c'est, ce que ce n'est pas
 
-C'est un FPS **soigné et jouable**, pas un AAA : pas de campagne, pas de multijoueur,
-pas de capture de mouvement, pas d'assets scannés. Les personnages sont des silhouettes
-articulées, le niveau tient sur une arène, l'IA se résume à patrouille → détection →
-tir → couverture.
+C'est un jeu d'arcade **soigné et jouable au téléphone**, pas un AAA : pas de campagne,
+pas de multijoueur, pas de compte, pas de publicité. Le niveau tient sur une arène,
+l'IA se résume à patrouille → détection → tir → couverture, avec une ligne de vue
+réellement vérifiée.
 
-Ce qui est réellement en place : éclairage dynamique avec ombres, post-traitement
-(bloom, vignette, grain, aberration), textures procédurales avec cartes de normales,
-arme avec recul/visée/rechargement, impacts, douilles, traçantes, son synthétisé,
-vagues, score, HUD complet, réglages persistants.
+Ce qui est en place : éclairage dynamique, post-traitement, textures procédurales,
+arme avec recul et rechargement, impacts, douilles, traçantes, son synthétisé,
+vagues, apparitions annoncées, headshots, score, record, HUD complet, commandes
+tactiles et clavier, réglages persistants.
+
+Le modèle d'arme est rendu dans une couche séparée : il ne traverse plus
+visuellement les murs. Les balles sont arrêtées par le décor, même à bout
+portant. Les **lampadaires sont destructibles** : un tir sur une tête de lampe
+la fait grésiller puis s'éteindre, avec sa lumière et son halo. Ils se rallument
+au début d'une nouvelle partie.
+
+Les apparitions sont vérifiées pour ne jamais placer un hostile dans un mur ou
+hors de l'arène. Si un hostile s'y retrouve malgré tout, il est replacé sur un
+point libre. Quand il ne reste qu'un seul hostile, un indicateur rouge indique
+sa direction et sa distance.
 
 ## Compatibilité
 
-- WebGL 2 obligatoire ; sans lui, une page « WEBGL 2 REQUIS » s'affiche au lieu d'un écran cassé.
-- Téléphone et tablette : le jeu demande un clavier et une souris et renvoie vers CASCADE
-  (aucune tentative de pointer lock tactile).
+- WebGL 2 obligatoire ; sans lui, une page « WEBGL 2 REQUIS » s'affiche proprement.
+- Android Chrome et iPhone Safari : mode tactile automatique, audio après le premier
+  appui, adaptation à la résolution, message clair en portrait.
+- Un ordinateur portable tactile reste en mode souris/clavier tant que l'utilisateur
+  ne touche pas l'écran ; le mode tactile peut être forcé dans les réglages.
 
 ## Notes techniques
 
-- WebGL2 requis ; prévoir un GPU même modeste. Le Raspberry Pi ne fait que servir les
-  fichiers, il ne rend rien.
-- Le rendu passe par une cible HalfFloat + composition maison : `renderer.toneMapping`
-  reste à `NoToneMapping`, l'ACES est appliqué dans `postfx.js`.
-- Les captures de contrôle sont dans `qa/screens/` ; les scripts Playwright de `qa/`
-  ne font pas partie du site et sont exclus du déploiement.
+- Le Raspberry Pi ne fait que servir les fichiers ; le rendu se fait sur l'appareil.
+- Le rendu passe par une cible de rendu puis une composition maison
+  (`renderer.toneMapping = NoToneMapping`, ACES dans `postfx.js`).
+- En qualité basse, la cible est en 8 bits et le matériau de composition est mis en
+  cache (plus d'allocation par image).
+- Résolution adaptative : si le téléphone descend sous ~27 fps, l'échelle de rendu
+  baisse progressivement jusqu'à 60 %.

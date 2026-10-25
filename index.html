@@ -6,8 +6,12 @@
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#070b0d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>OPÉRATION — assaut nocturne</title>
-<link rel="stylesheet" href="./style.css?v=20261022e">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./style.css?v=20261024h">
 </head>
 <body>
 
@@ -60,24 +64,30 @@
 
     <!-- Commandes tactiles (téléphone / tablette) -->
     <div id="tactile" class="cache">
-      <div id="zone-stick" aria-hidden="true">
-        <div id="stick-base"><div id="stick-pouce"></div></div>
+      <div id="dpad" aria-label="Déplacement">
+        <button type="button" class="t-bouton fleche haut" data-direction="haut" aria-label="Avancer">▲</button>
+        <button type="button" class="t-bouton fleche gauche" data-direction="gauche" aria-label="Aller à gauche">◀</button>
+        <button type="button" class="t-bouton fleche droite" data-direction="droite" aria-label="Aller à droite">▶</button>
+        <button type="button" class="t-bouton fleche bas" data-direction="bas" aria-label="Reculer">▼</button>
       </div>
       <button type="button" id="t-btn-pause" class="t-bouton pause" aria-label="Pause">II</button>
-      <div id="tactile-boutons">
-        <button type="button" id="t-btn-viser" class="t-bouton">VISER</button>
-        <button type="button" id="t-btn-tir" class="t-bouton tir">TIR</button>
-        <button type="button" id="t-btn-recharger" class="t-bouton petit">RECH.</button>
-        <button type="button" id="t-btn-saut" class="t-bouton petit">SAUT</button>
-      </div>
-      <div id="paysage" class="cache">
-        <div>
-          <p>Paysage conseillé pour plus de confort.</p>
-        </div>
-      </div>
+      <button type="button" id="t-btn-recharger" class="t-bouton petit recharger" aria-label="Recharger">RECH.</button>
+      <button type="button" id="t-btn-tir" class="t-bouton tir" aria-label="Tirer">TIR</button>
     </div>
     <div id="perf" class="cache"></div>
     <div id="journal" aria-live="polite"></div>
+    <div id="indicateur-hostile" class="cache" aria-hidden="true">
+      <span id="indicateur-hostile-distance"></span>
+    </div>
+  </div>
+
+  <!-- ===================== ÉCRAN PORTRAIT / ROTATION ===================== -->
+  <div id="orientation" class="cache" role="alert">
+    <div class="orientation-boite">
+      <div class="orientation-icone">⟳</div>
+      <h2>TOURNE TON TÉLÉPHONE</h2>
+      <p>Le jeu se joue en paysage.</p>
+    </div>
   </div>
 
   <!-- ========================= ÉCRAN D'ACCUEIL ========================= -->
@@ -92,11 +102,15 @@
       </p>
       <div class="actions">
         <button class="bouton principal" id="btn-jouer">JOUER</button>
+        <button class="bouton" id="btn-tuto">MODE D'EMPLOI</button>
         <button class="bouton" id="btn-reglages">RÉGLAGES</button>
-        <button class="bouton discret" id="btn-debug">DIAGNOSTIC</button>
+        <button class="bouton cache" id="btn-tactile">ACTIVER LE TACTILE</button>
+        <button class="bouton btn-plein-ecran" id="btn-plein-ecran">PLEIN ÉCRAN</button>
+        <button class="bouton discret btn-debug">DIAGNOSTIC</button>
         <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
       </div>
-      <div class="version" id="version">build 20261022e</div>
+      <div class="version" id="version">build 20261024h</div>
+      <div class="record-accueil" id="record-accueil">RECORD 0000</div>
       <div class="aide-cles" id="aide-clavier">
         <span><b>ZQSD</b> déplacer</span>
         <span><b>Souris</b> viser</span>
@@ -108,10 +122,99 @@
         <span><b>Échap</b> pause</span>
       </div>
       <div class="aide-cles cache" id="aide-tactile">
+        <span><b>Flèches</b> déplacer</span>
         <span><b>Glisser</b> viser</span>
-        <span><b>2 tapes</b> tirer</span>
-        <span><b>Joystick</b> déplacer</span>
-        <span><b>Boutons</b> tirer / viser / recharger</span>
+        <span><b>Tap</b> tirer</span>
+        <span><b>Maintien</b> tir continu</span>
+        <span><b>Bouton TIR</b> secours</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= MODE D'EMPLOI ========================= -->
+  <div id="tuto" class="voile">
+    <div class="panneau-accueil tuto-panneau">
+      <div class="surtitre">OPÉRATION · MODE D'EMPLOI</div>
+      <h2>COMMENT JOUER</h2>
+      <p class="accroche tuto-accroche">
+        Le jeu se joue en paysage. Tout se fait au doigt.
+      </p>
+
+      <div id="tuto-etapes-tactile" class="tuto-etapes">
+        <div class="tuto-etape">
+          <div class="tuto-icone deplacement" aria-hidden="true">
+            <span>←</span><span>↑</span><span>↓</span><span>→</span>
+          </div>
+          <div>
+            <b>Se déplacer</b>
+            <p>Utilise les quatre flèches en bas à gauche.</p>
+          </div>
+        </div>
+        <div class="tuto-etape">
+          <div class="tuto-icone viseur" aria-hidden="true"><span></span></div>
+          <div>
+            <b>Viser</b>
+            <p>Pose un doigt sur la moitié droite et glisse dans la direction à viser.
+               Le trait vert au centre indique où tu vises.</p>
+          </div>
+        </div>
+        <div class="tuto-etape">
+          <div class="tuto-icone tir" aria-hidden="true">TAP</div>
+          <div>
+            <b>Tirer</b>
+            <p>Un tap court tire une balle. Garde le doigt immobile pour tirer en continu.
+               Le bouton TIR fait la même chose.</p>
+          </div>
+        </div>
+        <div class="tuto-etape">
+          <div class="tuto-icone pause" aria-hidden="true">II</div>
+          <div>
+            <b>Recharger et pause</b>
+            <p>Le rechargement est automatique. Le bouton II met le jeu en pause.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="tuto-etapes-clavier" class="tuto-etapes cache">
+        <div class="tuto-etape">
+          <div class="tuto-icone large" aria-hidden="true">ZQSD</div>
+          <div>
+            <b>Se déplacer</b>
+            <p>ZQSD ou flèches. Maj pour sprinter, Ctrl pour s'accroupir.</p>
+          </div>
+        </div>
+        <div class="tuto-etape">
+          <div class="tuto-icone large" aria-hidden="true">SOURIS</div>
+          <div>
+            <b>Viser et tirer</b>
+            <p>Souris pour viser, clic gauche pour tirer, clic droit pour la visée précise.</p>
+          </div>
+        </div>
+        <div class="tuto-etape">
+          <div class="tuto-icone large" aria-hidden="true">R</div>
+          <div>
+            <b>Recharger</b>
+            <p>R pour recharger. Le rechargement est aussi automatique quand le chargeur est vide.</p>
+          </div>
+        </div>
+        <div class="tuto-etape">
+          <div class="tuto-icone large" aria-hidden="true">ÉCHAP</div>
+          <div>
+            <b>Pause</b>
+            <p>Échap pour la pause. F3 affiche les performances.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tuto-actions">
+        <label class="tuto-option">
+          <input type="checkbox" id="tuto-toujours">
+          <span>Afficher ce mode d'emploi avant chaque partie</span>
+        </label>
+        <div class="actions">
+          <button class="bouton principal" id="btn-tuto-jouer">JOUER</button>
+          <button class="bouton" id="btn-tuto-retour">RETOUR</button>
+        </div>
       </div>
     </div>
   </div>
@@ -124,6 +227,11 @@
         <span>Sensibilité souris</span>
         <input type="range" id="reg-sensibilite" min="20" max="300" step="5" value="100">
         <output id="reg-sensibilite-val">100 %</output>
+      </label>
+      <label class="ligne-reglage">
+        <span>Sensibilité tactile</span>
+        <input type="range" id="reg-sensibilite-tactile" min="40" max="220" step="5" value="100">
+        <output id="reg-sensibilite-tactile-val">100 %</output>
       </label>
       <label class="ligne-reglage">
         <span>Volume</span>
@@ -143,11 +251,16 @@
         <input type="checkbox" id="reg-inverser">
       </label>
       <label class="ligne-reglage">
+        <span>Aide à la visée</span>
+        <input type="checkbox" id="reg-aide-visee" checked>
+      </label>
+      <label class="ligne-reglage">
         <span>Commandes tactiles</span>
         <input type="checkbox" id="reg-tactile">
       </label>
       <div class="actions">
         <button class="bouton principal" id="btn-fermer-reglages">RETOUR</button>
+        <button class="bouton btn-plein-ecran">PLEIN ÉCRAN</button>
       </div>
     </div>
   </div>
@@ -159,6 +272,7 @@
       <div class="actions">
         <button class="bouton principal" id="btn-reprendre">REPRENDRE</button>
         <button class="bouton" id="btn-pause-reglages">RÉGLAGES</button>
+        <button class="bouton btn-plein-ecran" id="btn-plein-ecran-pause">PLEIN ÉCRAN</button>
         <button class="bouton" id="btn-abandonner">ABANDONNER</button>
       </div>
     </div>
@@ -175,10 +289,11 @@
         <div><span>Score</span><b id="fin-score">0</b></div>
         <div><span>Temps</span><b id="fin-temps">00:00</b></div>
       </div>
+      <div class="record-fin">RECORD <b id="fin-record">0000</b></div>
       <div class="actions">
         <button class="bouton principal" id="btn-rejouer">REJOUER</button>
         <button class="bouton" id="btn-menu">MENU</button>
-        <button class="bouton discret" id="btn-debug">DIAGNOSTIC</button>
+        <button class="bouton discret btn-debug">DIAGNOSTIC</button>
         <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
       </div>
     </div>
@@ -191,7 +306,7 @@
       <h2 id="incompatible-titre">MATÉRIEL REQUIS</h2>
       <p class="accroche" id="incompatible-texte" style="margin-bottom:24px"></p>
       <div class="actions">
-        <button class="bouton discret" id="btn-debug">DIAGNOSTIC</button>
+        <button class="bouton discret btn-debug">DIAGNOSTIC</button>
         <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
       </div>
     </div>
@@ -211,8 +326,8 @@
 </div>
 
 <script type="importmap">
-{ "imports": { "three": "./lib/three.module.js?v=20261022e" } }
+{ "imports": { "three": "./lib/three.module.js?v=20261024h" } }
 </script>
-<script type="module" src="./js/main.js?v=20261022e"></script>
+<script type="module" src="./js/main.js?v=20261024h"></script>
 </body>
 </html>

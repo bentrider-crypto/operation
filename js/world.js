@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261022e";
-import { Textures } from "./textures.js?v=20261022e";
+import { CONFIG } from "./config.js?v=20261024h";
+import { Textures } from "./textures.js?v=20261024h";
 
 /* =============================================================================
    Le niveau : un dépôt logistique de nuit, ceint de murs, avec un entrepôt
@@ -386,19 +386,44 @@ export class Monde {
     const ampouleMat = new THREE.MeshStandardMaterial({
       color: 0xffd9a0, emissive: 0xffa244, emissiveIntensity: 5, toneMapped: false,
     });
+    const ampouleEteinteMat = new THREE.MeshStandardMaterial({
+      color: 0x1b1e1d, roughness: 0.9, metalness: 0.15,
+    });
+    this._matAmpouleAllumee = ampouleMat;
+    this._matAmpouleEteinte = ampouleEteinteMat;
+
+    // Cible invisible autour de la tête de lampe : plus généreuse que l'ampoule.
+    const matCible = new THREE.MeshBasicMaterial({
+      transparent: true, opacity: 0, depthWrite: false,
+    });
 
     const mâts = [[-20, 6, 0], [20, -4, 0], [2, -20, 0], [-4, 20, 0]];
     for (const [x, z] of mâts) {
       this._cylindre(0.11, 7.2, matMetal, x, 3.6, z, false, 8);
       this._boite(1.6, 0.14, 0.14, matMetal, x + 0.7, 7.15, z, 0, false);
+
       const ampoule = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.32), ampouleMat);
       ampoule.position.set(x + 1.35, 7.0, z);
       this.scene.add(ampoule);
 
+      const cible = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.9, 0.9), matCible);
+      cible.position.copy(ampoule.position);
+      cible.position.y += 0.1;
+      this.scene.add(cible);
+      this.meshes.push(ampoule, cible);
+
       const l = new THREE.PointLight(0xffa244, 34, 26, 2);
       l.position.set(x + 1.35, 6.85, z);
       this.scene.add(l);
-      this.ampoules.push({ ampoule, lumiere: l, base: 26, phase: Math.random() * 6.28 });
+
+      const record = {
+        ampoule, cible, lumiere: l, base: 26, phase: Math.random() * 6.28,
+        eteinte: false, _extinction: 0,
+        materiauAllume: ampouleMat, materiauEteint: ampouleEteinteMat,
+      };
+      ampoule.userData.lampadaire = record;
+      cible.userData.lampadaire = record;
+      this.ampoules.push(record);
     }
 
     // Halo visible de loin autour de chaque ampoule (sprite).
@@ -413,6 +438,49 @@ export class Monde {
       this.scene.add(s);
       a.halo = s;
     }
+  }
+
+  eteindreLampadaire(record) {
+    if (!record || record.eteinte) return false;
+    record.eteinte = true;
+    record._extinction = 0.6;
+    record.ampoule.material = record.materiauEteint;
+    if (record.halo) record.halo.visible = false;
+    return true;
+  }
+
+  reinitialiserLampadaires() {
+    for (const a of this.ampoules) {
+      a.eteinte = false;
+      a._extinction = 0;
+      a.ampoule.material = a.materiauAllume;
+      a.lumiere.intensity = a.base;
+      if (a.halo) {
+        a.halo.visible = true;
+        a.halo.material.opacity = 0.5;
+      }
+    }
+  }
+
+  // Point libre pour une apparition ou un déplacement sûr.
+  estLibre(x, z, marge = 0.8) {
+    const lim = this.limites - Math.max(0.9, marge);
+    if (Math.abs(x) > lim || Math.abs(z) > lim) return false;
+    for (const b of this.colliders) {
+      if (b.max.y < 0.3) continue;
+      if (x > b.min.x - marge && x < b.max.x + marge &&
+          z > b.min.z - marge && z < b.max.z + marge) return false;
+    }
+    return true;
+  }
+
+  // Le centre est-il réellement à l'intérieur d'un obstacle ?
+  dansCollider(x, z) {
+    for (const b of this.colliders) {
+      if (b.max.y < 0.3) continue;
+      if (x > b.min.x && x < b.max.x && z > b.min.z && z < b.max.z) return true;
+    }
+    return false;
   }
 
   _textureHalo() {
@@ -499,8 +567,19 @@ export class Monde {
   /* --------------------------------------------------------------- animation */
   animer(dt, temps) {
     this._temps += dt;
-    // Scintillement léger des lampes à sodium.
+    // Scintillement léger des lampes à sodium, extinction avec amorce.
     for (const a of this.ampoules) {
+      if (a.eteinte) {
+        if (a._extinction > 0) {
+          a._extinction = Math.max(0, a._extinction - dt);
+          const k = a._extinction / 0.6;
+          a.lumiere.intensity = a.base * k * (Math.random() < 0.45 ? 1 : 0.12);
+        } else {
+          a.lumiere.intensity = 0;
+        }
+        if (a.halo) a.halo.visible = false;
+        continue;
+      }
       const f = 1 + Math.sin(temps * 7 + a.phase) * 0.03 + Math.sin(temps * 23 + a.phase * 2) * 0.015;
       a.lumiere.intensity = a.base * f;
       if (a.halo) a.halo.material.opacity = 0.5 * f;

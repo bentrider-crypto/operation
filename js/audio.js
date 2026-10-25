@@ -11,7 +11,10 @@ export class Audio {
 
   // À appeler sur un geste utilisateur (obligatoire sur tous les navigateurs).
   demarrer() {
-    if (this.ctx) { if (this.ctx.state === "suspended") this.ctx.resume(); return; }
+    if (this.ctx) {
+      if (this.ctx.state === "suspended") this.ctx.resume()?.catch?.(() => {});
+      return;
+    }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();
@@ -34,8 +37,12 @@ export class Audio {
     if (this.master) this.master.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.05);
   }
 
-  suspendre() { if (this.ctx && this.ctx.state === "running") this.ctx.suspend(); }
-  reprendre() { if (this.ctx && this.ctx.state === "suspended") this.ctx.resume(); }
+  suspendre() {
+    if (this.ctx && this.ctx.state === "running") this.ctx.suspend()?.catch?.(() => {});
+  }
+  reprendre() {
+    if (this.ctx && this.ctx.state === "suspended") this.ctx.resume()?.catch?.(() => {});
+  }
 
   // --------------------------------------------------------------- fabriques
   _fabriquerBruit(secondes) {
@@ -188,6 +195,30 @@ export class Audio {
     o.start(t); o.stop(t + 0.25);
   }
 
+  lampadaire() {
+    if (!this.pret) return;
+    const t = this.ctx.currentTime;
+
+    // Petit "clac" métallique du luminaire.
+    const o = this.ctx.createOscillator();
+    o.type = "triangle";
+    o.frequency.setValueAtTime(1600, t);
+    o.frequency.exponentialRampToValueAtTime(420, t + 0.12);
+    const g = this.ctx.createGain();
+    this._env(g, t, 0.001, 0.005, 0.12, 0.12);
+    o.connect(g).connect(this.master);
+    o.start(t); o.stop(t + 0.16);
+
+    // Grésillement électrique bref.
+    const s = this._sourceBruit(0.2);
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = "highpass"; hp.frequency.value = 1800;
+    const gs = this.ctx.createGain();
+    this._env(gs, t, 0.002, 0.01, 0.15, 0.06);
+    s.connect(hp).connect(gs).connect(this.master);
+    s.start(t); s.stop(t + 0.2);
+  }
+
   vague() {
     if (!this.pret) return;
     const t = this.ctx.currentTime;
@@ -212,6 +243,21 @@ export class Audio {
     this._env(g, t, 0.001, 0.004, 0.05, 0.06);
     o.connect(g).connect(this.master);
     o.start(t); o.stop(t + 0.08);
+  }
+
+  // Bip d'avertissement quand un hostile s'apprête à apparaître.
+  alerte() {
+    if (!this.pret) return;
+    const t = this.ctx.currentTime;
+    [880, 620].forEach((f, i) => {
+      const o = this.ctx.createOscillator();
+      o.type = "square";
+      o.frequency.value = f;
+      const g = this.ctx.createGain();
+      this._env(g, t + i * 0.11, 0.002, 0.01, 0.08, 0.055);
+      o.connect(g).connect(this.master);
+      o.start(t + i * 0.11); o.stop(t + i * 0.11 + 0.1);
+    });
   }
 
   _lancerAmbiance() {

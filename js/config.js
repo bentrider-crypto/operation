@@ -11,19 +11,19 @@ export const CONFIG = {
     gravite: 22,
     saut: 6.4,
     vieMax: 100,
-    regen: 7.5,            // PV/s après 4 s sans dégâts
-    delaiRegen: 4.0,
+    regen: 6.0,            // PV/s après 5 s sans dégâts
+    delaiRegen: 5.0,
     hauteurAccroupi: 1.18,
   },
 
   arme: {
     nom: "MK-7",
-    cadence: 720,          // coups/minute
+    cadence: 600,          // coups/minute
     degats: 24,
     degatsTete: 68,
     chargeur: 30,
     reserveMax: 180,
-    tempsRechargement: 1.95,
+    tempsRechargement: 1.75,
     dispersion: 0.011,     // radians, debout
     dispersionVise: 0.0022,
     dispersionMouvement: 0.02,
@@ -32,25 +32,33 @@ export const CONFIG = {
     auto: true,
     zoomVise: 55,          // FOV en visée
     punchCamera: 0.012,
+    // Aide discrète réservée au tactile : petit cône autour du réticule.
+    aideVisee: {
+      cone: 0.075,         // ~4,3°
+      force: 0.5,
+      portee: 55,
+    },
   },
 
   ennemis: {
-    vie: 100,
-    vitesse: 2.4,
-    vitesseAssaut: 4.2,
-    degats: 6,
-    cadence: 420,
-    precision: 0.055,
-    porteeVision: 46,
-    porteeTir: 34,
-    tempsReaction: 0.45,
+    vie: 90,
+    vitesse: 2.2,
+    vitesseAssaut: 3.2,
+    degats: 4,
+    cadence: 300,
+    precision: 0.06,
+    porteeVision: 38,
+    porteeTir: 26,
+    tempsReaction: 0.8,
   },
 
   vagues: {
-    premiere: 5,
-    increment: 2,
-    maxSimultanes: 9,
-    pauseEntreVagues: 4.0,
+    premiere: 4,
+    increment: 1,
+    maxSimultanes: 4,
+    pauseEntreVagues: 3.5,
+    delaiApparition: 1.3,
+    avertissement: 0.8,   // secondes entre le marqueur et l'ennemi
   },
 
   rendu: {
