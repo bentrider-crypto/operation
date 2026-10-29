@@ -9,7 +9,6 @@ Version mobile simplifiée : une arène, une arme, des vagues, un score et un re
 ## Captures
 
 <p align="center">
-  <img src="images/screen.jpg" width="48%" alt="Capture du jeu OPÉRATION">
   <img src="images/screen1.jpg" width="48%" alt="Capture du jeu OPÉRATION">
   <img src="images/screen2.jpg" width="48%" alt="Capture du jeu OPÉRATION">
   <img src="images/screen3.jpg" width="48%" alt="Capture du jeu OPÉRATION">
