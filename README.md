@@ -67,6 +67,20 @@ avant chaque partie.
 Réglages (sensibilités, volume, qualité, axe Y, aide à la visée, tactile) conservés
 dans `localStorage`, ainsi que le record.
 
+## Avis des visiteurs
+
+Le bouton **LAISSER UN AVIS** est disponible dans le menu, la pause et l'écran de fin.
+Le message est envoyé par `commentaire.php` et stocké **hors de la racine web**, dans
+`/var/www/default/data/commentaires-operation.jsonl` (JSONL, une ligne par message).
+Les messages ne sont pas publiés. Une empreinte d'IP tronquée sert uniquement à
+limiter les envois ; l'adresse en clair n'est pas conservée.
+
+Pour les lire sur `raspi-web` :
+
+```bash
+sudo tail -n 20 /var/www/default/data/commentaires-operation.jsonl
+```
+
 ## Tester en local
 
 ```bash
@@ -143,6 +157,9 @@ sa direction et sa distance.
 - WebGL 2 obligatoire ; sans lui, une page « WEBGL 2 REQUIS » s'affiche proprement.
 - Android Chrome et iPhone Safari : mode tactile automatique, audio après le premier
   appui, adaptation à la résolution, message clair en portrait.
+- Le plein écran est redemandé automatiquement au premier contact s'il a été perdu,
+  et le démarrage laisse un court délai au verrouillage d'orientation avant toute
+  mise en pause.
 - Un ordinateur portable tactile reste en mode souris/clavier tant que l'utilisateur
   ne touche pas l'écran ; le mode tactile peut être forcé dans les réglages.
 
@@ -155,3 +172,14 @@ sa direction et sa distance.
   cache (plus d'allocation par image).
 - Résolution adaptative : si le téléphone descend sous ~27 fps, l'échelle de rendu
   baisse progressivement jusqu'à 60 %.
+
+
+## Licence
+
+Le code du jeu est distribué sous licence **MIT** — voir `LICENSE`.
+
+Three.js est distribué sous licence MIT — voir `THIRD-PARTY-NOTICES.txt`.
+© 2026 Franck Estingoy.
+
+Le nom « OPÉRATION », l'identité visuelle et les messages laissés par les
+visiteurs ne sont pas couverts par la licence du code.

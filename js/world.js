@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261024h";
-import { Textures } from "./textures.js?v=20261024h";
+import { CONFIG } from "./config.js?v=20261024m";
+import { Textures } from "./textures.js?v=20261024m";
 
 /* =============================================================================
    Le niveau : un dépôt logistique de nuit, ceint de murs, avec un entrepôt

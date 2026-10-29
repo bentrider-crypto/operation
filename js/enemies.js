@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261024h";
+import { CONFIG } from "./config.js?v=20261024m";
 
 /* =============================================================================
    Hostiles : silhouettes articulées, détection par ligne de vue, combat à

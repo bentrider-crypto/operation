@@ -6,12 +6,14 @@
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#070b0d">
+<meta name="author" content="Franck Estingoy">
+<link rel="license" href="./LICENSE">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>OPÉRATION — assaut nocturne</title>
 <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="./style.css?v=20261024h">
+<link rel="stylesheet" href="./style.css?v=20261024m">
 </head>
 <body>
 
@@ -103,14 +105,21 @@
       <div class="actions">
         <button class="bouton principal" id="btn-jouer">JOUER</button>
         <button class="bouton" id="btn-tuto">MODE D'EMPLOI</button>
+        <button class="bouton btn-avis" data-depuis="accueil">LAISSER UN AVIS</button>
         <button class="bouton" id="btn-reglages">RÉGLAGES</button>
         <button class="bouton cache" id="btn-tactile">ACTIVER LE TACTILE</button>
         <button class="bouton btn-plein-ecran" id="btn-plein-ecran">PLEIN ÉCRAN</button>
         <button class="bouton discret btn-debug">DIAGNOSTIC</button>
         <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
+        <a class="bouton discret" href="https://ridetolescala.online/">RIDETOLESCALA.ONLINE</a>
       </div>
-      <div class="version" id="version">build 20261024h</div>
+      <div class="version" id="version">build 20261024m</div>
       <div class="record-accueil" id="record-accueil">RECORD 0000</div>
+      <div class="licence-accueil">
+        <a href="./LICENSE" target="_blank" rel="license">Licence MIT</a>
+        <span>·</span>
+        <a href="./THIRD-PARTY-NOTICES.txt" target="_blank">Crédits tiers</a>
+      </div>
       <div class="aide-cles" id="aide-clavier">
         <span><b>ZQSD</b> déplacer</span>
         <span><b>Souris</b> viser</span>
@@ -215,6 +224,11 @@
           <button class="bouton principal" id="btn-tuto-jouer">JOUER</button>
           <button class="bouton" id="btn-tuto-retour">RETOUR</button>
         </div>
+      <div class="nav-jeux nav-jeux-tuto">
+        <button type="button" class="lien-nav js-nav-accueil">MENU</button>
+        <a class="lien-nav" href="../">CASCADE</a>
+        <a class="lien-nav" href="https://ridetolescala.online/">ACCUEIL</a>
+      </div>
       </div>
     </div>
   </div>
@@ -262,6 +276,12 @@
         <button class="bouton principal" id="btn-fermer-reglages">RETOUR</button>
         <button class="bouton btn-plein-ecran">PLEIN ÉCRAN</button>
       </div>
+      <div class="nav-jeux">
+        <button type="button" class="lien-nav js-nav-tuto" data-depuis="reglages">MODE D'EMPLOI</button>
+        <button type="button" class="lien-nav js-nav-accueil">MENU</button>
+        <a class="lien-nav" href="../">CASCADE</a>
+        <a class="lien-nav" href="https://ridetolescala.online/">ACCUEIL</a>
+      </div>
     </div>
   </div>
 
@@ -272,8 +292,15 @@
       <div class="actions">
         <button class="bouton principal" id="btn-reprendre">REPRENDRE</button>
         <button class="bouton" id="btn-pause-reglages">RÉGLAGES</button>
+        <button class="bouton btn-avis" data-depuis="pause">LAISSER UN AVIS</button>
         <button class="bouton btn-plein-ecran" id="btn-plein-ecran-pause">PLEIN ÉCRAN</button>
         <button class="bouton" id="btn-abandonner">ABANDONNER</button>
+      </div>
+      <div class="nav-jeux">
+        <button type="button" class="lien-nav js-nav-tuto" data-depuis="pause">MODE D'EMPLOI</button>
+        <button type="button" class="lien-nav js-nav-accueil">MENU</button>
+        <a class="lien-nav" href="../">CASCADE</a>
+        <a class="lien-nav" href="https://ridetolescala.online/">ACCUEIL</a>
       </div>
     </div>
   </div>
@@ -293,8 +320,16 @@
       <div class="actions">
         <button class="bouton principal" id="btn-rejouer">REJOUER</button>
         <button class="bouton" id="btn-menu">MENU</button>
+        <button class="bouton btn-avis" data-depuis="fin">LAISSER UN AVIS</button>
         <button class="bouton discret btn-debug">DIAGNOSTIC</button>
         <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
+        <a class="bouton discret" href="https://ridetolescala.online/">RIDETOLESCALA.ONLINE</a>
+      </div>
+      <div class="nav-jeux">
+        <button type="button" class="lien-nav js-nav-tuto" data-depuis="fin">MODE D'EMPLOI</button>
+        <button type="button" class="lien-nav js-nav-accueil">MENU</button>
+        <a class="lien-nav" href="../">CASCADE</a>
+        <a class="lien-nav" href="https://ridetolescala.online/">ACCUEIL</a>
       </div>
     </div>
   </div>
@@ -308,6 +343,7 @@
       <div class="actions">
         <button class="bouton discret btn-debug">DIAGNOSTIC</button>
         <a class="bouton discret" href="../">← RETOUR À CASCADE</a>
+        <a class="bouton discret" href="https://ridetolescala.online/">RIDETOLESCALA.ONLINE</a>
       </div>
     </div>
   </div>
@@ -325,9 +361,73 @@
   <div id="erreur" class="cache"></div>
 </div>
 
+  <!-- ============================== AVIS ============================== -->
+  <div id="avis" class="voile">
+    <div class="panneau-accueil avis-panneau">
+      <div class="surtitre">OPÉRATION · RETOUR DE TERRAIN</div>
+      <h2>LAISSER UN AVIS</h2>
+      <p class="accroche avis-accroche">
+        Un bug, un manque de munitions, une idée ? Ton message est transmis à Franck.
+        Il n'est pas publié.
+      </p>
+      <form id="form-avis" action="./commentaire.php" method="post" accept-charset="utf-8">
+        <label class="ligne-reglage">
+          <span>Pseudo (facultatif)</span>
+          <input type="text" id="avis-pseudo" name="pseudo" maxlength="40" autocomplete="nickname">
+        </label>
+        <label class="ligne-reglage">
+          <span>Point principal</span>
+          <select id="avis-sujet" name="sujet">
+            <option value="">—</option>
+            <option value="munitions">Manque de munitions</option>
+            <option value="difficulte">Difficulté</option>
+            <option value="commandes">Commandes / visée</option>
+            <option value="performance">Fluidité / performance</option>
+            <option value="bug">Bug</option>
+            <option value="autre">Autre</option>
+          </select>
+        </label>
+        <label class="ligne-reglage">
+          <span>Note</span>
+          <select id="avis-note" name="note">
+            <option value="">—</option>
+            <option value="5">5 — excellent</option>
+            <option value="4">4 — très bien</option>
+            <option value="3">3 — correct</option>
+            <option value="2">2 — moyen</option>
+            <option value="1">1 — à revoir</option>
+          </select>
+        </label>
+        <label class="avis-message">
+          <span>Ton message</span>
+          <textarea id="avis-message" name="message" maxlength="1200" minlength="10" required
+                    placeholder="Ce qui marche, ce qui bloque, ce que tu changerais…"></textarea>
+        </label>
+        <input type="text" name="site" id="avis-site" class="avis-piege"
+               tabindex="-1" autocomplete="off" aria-hidden="true">
+        <p class="avis-note">
+          Le message, le pseudo, la version et une empreinte technique sont conservés
+          sur le serveur. Aucune adresse IP en clair n'est enregistrée.
+        </p>
+        <div class="actions">
+          <button type="submit" class="bouton principal" id="btn-avis-envoyer">ENVOYER</button>
+          <button type="button" class="bouton" id="btn-avis-fermer">FERMER</button>
+        </div>
+        <div id="avis-statut" class="avis-statut" role="status" aria-live="polite"></div>
+      </form>
+      <div class="nav-jeux">
+        <button type="button" class="lien-nav js-nav-tuto" data-depuis="avis">MODE D'EMPLOI</button>
+        <button type="button" class="lien-nav js-nav-accueil">MENU</button>
+        <a class="lien-nav" href="../">CASCADE</a>
+        <a class="lien-nav" href="https://ridetolescala.online/">ACCUEIL</a>
+      </div>
+    </div>
+  </div>
+
+
 <script type="importmap">
-{ "imports": { "three": "./lib/three.module.js?v=20261024h" } }
+{ "imports": { "three": "./lib/three.module.js?v=20261024m" } }
 </script>
-<script type="module" src="./js/main.js?v=20261024h"></script>
+<script type="module" src="./js/main.js?v=20261024m"></script>
 </body>
 </html>

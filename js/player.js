@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261024h";
+import { CONFIG } from "./config.js?v=20261024m";
 
 /* =============================================================================
    Entrées clavier/souris + contrôleur du joueur (capsule contre boîtes AABB).
@@ -25,6 +25,9 @@ export class Entrees {
     this._écouteurs = {};
 
     window.addEventListener("keydown", (e) => {
+      const cible = e.target;
+      if (cible && (cible.tagName === "INPUT" || cible.tagName === "TEXTAREA" ||
+          cible.tagName === "SELECT" || cible.isContentEditable)) return;
       if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab"].includes(e.code)) e.preventDefault();
       if (e.repeat) return;
       this.touches.add(e.code);

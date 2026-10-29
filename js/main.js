@@ -1,11 +1,11 @@
 import * as THREE from "three";
-import { CONFIG, ETATS } from "./config.js?v=20261024h";
-import { Monde } from "./world.js?v=20261024h";
-import { Joueur, Entrees } from "./player.js?v=20261024h";
-import { Arme } from "./weapon.js?v=20261024h";
-import { GestionEnnemis } from "./enemies.js?v=20261024h";
-import { PostFX } from "./postfx.js?v=20261024h";
-import { Audio } from "./audio.js?v=20261024h";
+import { CONFIG, ETATS } from "./config.js?v=20261024m";
+import { Monde } from "./world.js?v=20261024m";
+import { Joueur, Entrees } from "./player.js?v=20261024m";
+import { Arme } from "./weapon.js?v=20261024m";
+import { GestionEnnemis } from "./enemies.js?v=20261024m";
+import { PostFX } from "./postfx.js?v=20261024m";
+import { Audio } from "./audio.js?v=20261024m";
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,6 +39,10 @@ class Jeu {
     this.qualite = CONFIG.rendu.qualite[this.reglages.qualite] || CONFIG.rendu.qualite.normale;
 
     this._resScale = 1;
+    this._pleinEcranVoulu = false;
+    this._pleinEcranActif = false;
+    this._graceOrientation = false;
+    this._graceOrientationTimer = null;
     this._adaptTemps = 0;
     this._adaptImages = 0;
     this._dernierFps = 60;
@@ -215,6 +219,26 @@ class Jeu {
     $("btn-tuto").addEventListener("click", () => { this.audio.interface(); this._ouvrirTuto(); });
     $("btn-tuto-jouer").addEventListener("click", () => { this.audio.interface(); this._lancerDepuisTuto(); });
     $("btn-tuto-retour").addEventListener("click", () => { this.audio.interface(); this._fermerTuto(); });
+    document.querySelectorAll(".btn-avis").forEach((b) => {
+      b.addEventListener("click", () => {
+        this.audio.interface();
+        this._ouvrirAvis(b.dataset.depuis || "accueil");
+      });
+    });
+    document.querySelectorAll(".js-nav-tuto").forEach((b) => {
+      b.addEventListener("click", () => {
+        this.audio.interface();
+        this._ouvrirTuto(b.dataset.depuis || "accueil");
+      });
+    });
+    document.querySelectorAll(".js-nav-accueil").forEach((b) => {
+      b.addEventListener("click", () => {
+        this.audio.interface();
+        this._allerAccueil();
+      });
+    });
+    $("btn-avis-fermer")?.addEventListener("click", () => { this.audio.interface(); this._fermerAvis(); });
+    this._cablesAvis();
     $("tuto-toujours").addEventListener("change", () => {
       this._tutoToujours = $("tuto-toujours").checked;
       this._sauverTuto();
@@ -324,6 +348,17 @@ class Jeu {
       this._activerTactile();
     }, { passive: true });
 
+    document.addEventListener("fullscreenchange", () => {
+      this._pleinEcranActif = !!document.fullscreenElement;
+    });
+
+    document.addEventListener("touchstart", () => {
+      if (this.tactile && this._pleinEcranVoulu && !document.fullscreenElement &&
+          this.etat === ETATS.JEU) {
+        this._pleinEcran();
+      }
+    }, { passive: true });
+
     document.addEventListener("pointerlockchange", () => {
       if (!this.entrees || this.tactile) return;
       const verrouille = document.pointerLockElement === this.canvas;
@@ -346,6 +381,9 @@ class Jeu {
     window.addEventListener("orientationchange", () => setTimeout(() => this._verifierOrientation(), 200));
 
     window.addEventListener("keydown", (e) => {
+      const cible = e.target;
+      if (cible && (cible.tagName === "INPUT" || cible.tagName === "TEXTAREA" ||
+          cible.tagName === "SELECT" || cible.isContentEditable)) return;
       if (e.code === "F3") {
         e.preventDefault();
         this._perfVisible = !this._perfVisible;
@@ -503,7 +541,9 @@ class Jeu {
 
   _pleinEcran() {
     const el = document.documentElement;
-    if (typeof el.requestFullscreen !== "function" || document.fullscreenElement) return;
+    if (typeof el.requestFullscreen !== "function") return;
+    this._pleinEcranVoulu = true;
+    if (document.fullscreenElement) return;
     el.requestFullscreen()
       .then(() => {
         if (screen.orientation?.lock) screen.orientation.lock("landscape").catch(() => {});
@@ -522,13 +562,16 @@ class Jeu {
     $("orientation")?.classList.toggle("cache", !(portrait && enJeu));
 
     if (portrait && this.etat === ETATS.JEU) {
+      // Au démarrage, on laisse au plein écran / verrouillage d'orientation
+      // le temps de faire son travail avant de mettre en pause.
+      if (this._graceOrientation) return;
       // Mise en pause due à l'orientation : on reprendra tout seul quand le
-      // téléphone sera revenu en paysage (utile pendant le passage plein écran).
+      // téléphone sera revenu en paysage.
       this._pause("orientation");
       return;
     }
     if (!portrait && this.etat === ETATS.PAUSE && this._pauseOrigineOrientation) {
-      this._reprendre();
+      this._reprendre({ automatique: true });
     }
   }
 
@@ -569,6 +612,8 @@ class Jeu {
     this.ennemis?.nettoyer();
     this.arme?.reinitialiser();
     this.vague = 1; this.score = 0; this.elimines = 0; this.tempsPartie = 0;
+    this._graceOrientation = false;
+    clearTimeout(this._graceOrientationTimer);
     this._masquerCommandesTactiles();
     this._majRecordAccueil();
     this._verifierOrientation();
@@ -577,6 +622,12 @@ class Jeu {
   _lancerPartie() {
     this._masquerVoiles();
     this.etat = ETATS.JEU;
+    this._graceOrientation = true;
+    clearTimeout(this._graceOrientationTimer);
+    this._graceOrientationTimer = setTimeout(() => {
+      this._graceOrientation = false;
+      this._verifierOrientation();
+    }, 1200);
     $("hud").classList.remove("cache");
     this.joueur.reinitialiser();
     this.ennemis.nettoyer();
@@ -622,6 +673,8 @@ class Jeu {
   _pause(origine = "manuelle") {
     if (this.etat !== ETATS.JEU) return;
     this.etat = ETATS.PAUSE;
+    this._graceOrientation = false;
+    clearTimeout(this._graceOrientationTimer);
     this._raisonPause = origine;
     this._pauseOrigineOrientation = origine === "orientation";
     this._afficherVoile("pause");
@@ -634,19 +687,95 @@ class Jeu {
     this._verifierOrientation();
   }
 
-  _reprendre() {
+  _reprendre({ automatique = false } = {}) {
     if (!this.joueur) return;
     if (this.tactile && window.innerHeight > window.innerWidth) {
       this._verifierOrientation();
       return;
     }
     this._pauseOrigineOrientation = false;
+    this._graceOrientation = false;
+    clearTimeout(this._graceOrientationTimer);
+    // Si le plein écran a été perdu, on le redemande depuis ce clic utilisateur.
+    if (this.tactile && !automatique && !document.fullscreenElement) this._pleinEcran();
     this._masquerVoiles();
     this.etat = ETATS.JEU;
     this.audio.reprendre();
     this.entrees.reinitialiserTactile();
     if (this.tactile) this._afficherCommandesTactiles();
     else this.entrees.demanderVerrou();
+    this._verifierOrientation();
+  }
+
+  /* ------------------------------------------------------------------- avis */
+  _cablesAvis() {
+    const form = $("form-avis");
+    if (!form) return;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const statut = $("avis-statut");
+      const message = $("avis-message").value.trim();
+      if (message.length < 10) {
+        statut.textContent = "Écris au moins quelques mots (10 caractères).";
+        statut.className = "avis-statut erreur";
+        $("avis-message").focus();
+        return;
+      }
+
+      const bouton = $("btn-avis-envoyer");
+      bouton.disabled = true;
+      statut.textContent = "Envoi en cours…";
+      statut.className = "avis-statut";
+
+      try {
+        const donnees = new FormData(form);
+        donnees.set("version", (($("version")?.textContent || "").replace(/^build\s*/i, "").trim()));
+        donnees.set("ecran", `${window.innerWidth}x${window.innerHeight}`);
+        const reponse = await fetch("./commentaire.php", {
+          method: "POST",
+          body: donnees,
+          headers: { "Accept": "application/json" },
+        });
+        const resultat = await reponse.json().catch(() => null);
+        if (!reponse.ok || !resultat?.ok) {
+          throw new Error(resultat?.erreur || "Envoi impossible pour le moment.");
+        }
+        form.reset();
+        statut.textContent = "Merci, ton message est bien arrivé.";
+        statut.className = "avis-statut ok";
+      } catch (err) {
+        statut.textContent = err?.message || "Envoi impossible. Réessaie plus tard.";
+        statut.className = "avis-statut erreur";
+      } finally {
+        bouton.disabled = false;
+      }
+    });
+  }
+
+  _ouvrirAvis(depuis = "accueil") {
+    this._avisDepuis = depuis;
+    this._afficherVoile("avis");
+    this.entrees?.relacherVerrou();
+    this.entrees?.reinitialiserTactile();
+    const statut = $("avis-statut");
+    if (statut) {
+      statut.textContent = "";
+      statut.className = "avis-statut";
+    }
+    this._verifierOrientation();
+  }
+
+  _fermerAvis() {
+    if (this._avisDepuis === "pause") {
+      this._afficherVoile("pause");
+      this.etat = ETATS.PAUSE;
+    } else if (this._avisDepuis === "fin") {
+      this._afficherVoile("fin");
+      this.etat = ETATS.FIN;
+    } else {
+      this._afficherVoile("accueil");
+      this.etat = ETATS.ACCUEIL;
+    }
     this._verifierOrientation();
   }
 
@@ -681,8 +810,9 @@ class Jeu {
     this._lancerPartie();
   }
 
-  _ouvrirTuto() {
-    this.etat = ETATS.ACCUEIL;
+  _ouvrirTuto(depuis = "accueil") {
+    this._tutoDepuis = depuis;
+    this._etatTutoPrecedent = this.etat;
     this._afficherVoile("tuto");
     this.entrees?.relacherVerrou();
     this.entrees?.reinitialiserTactile();
@@ -692,8 +822,23 @@ class Jeu {
   }
 
   _fermerTuto() {
-    this._afficherVoile("accueil");
-    this.etat = ETATS.ACCUEIL;
+    const precedent = this._etatTutoPrecedent;
+    if (this._tutoDepuis === "pause") {
+      this._afficherVoile("pause");
+      this.etat = ETATS.PAUSE;
+    } else if (this._tutoDepuis === "fin") {
+      this._afficherVoile("fin");
+      this.etat = ETATS.FIN;
+    } else if (this._tutoDepuis === "reglages") {
+      this._afficherVoile("reglages");
+      this.etat = precedent === ETATS.PAUSE ? ETATS.PAUSE : ETATS.ACCUEIL;
+    } else if (this._tutoDepuis === "avis") {
+      this._afficherVoile("avis");
+      this.etat = precedent;
+    } else {
+      this._afficherVoile("accueil");
+      this.etat = ETATS.ACCUEIL;
+    }
     this._verifierOrientation();
   }
 
@@ -716,11 +861,11 @@ class Jeu {
   }
 
   _afficherVoile(id) {
-    ["accueil", "tuto", "reglages", "pause", "fin"].forEach((n) => $(n).classList.toggle("actif", n === id));
+    ["accueil", "tuto", "avis", "reglages", "pause", "fin"].forEach((n) => $(n).classList.toggle("actif", n === id));
   }
 
   _masquerVoiles() {
-    ["accueil", "tuto", "reglages", "pause", "fin"].forEach((n) => $(n).classList.remove("actif"));
+    ["accueil", "tuto", "avis", "reglages", "pause", "fin"].forEach((n) => $(n).classList.remove("actif"));
   }
 
   _terminer() {

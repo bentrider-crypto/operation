@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261024h";
+import { CONFIG } from "./config.js?v=20261024m";
 
 /* =============================================================================
    Arme à la première personne : modèle géométrique, recul, visée, rechargement
