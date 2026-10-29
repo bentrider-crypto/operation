@@ -6,6 +6,18 @@ chargement, tout le son est synthétisé.
 
 Version mobile simplifiée : une arène, une arme, des vagues, un score et un record local.
 
+## Captures
+
+<p align="center">
+  <img src="images/screen.jpg" width="48%" alt="Capture du jeu OPÉRATION">
+  <img src="images/screen1.jpg" width="48%" alt="Capture du jeu OPÉRATION">
+  <img src="images/screen2.jpg" width="48%" alt="Capture du jeu OPÉRATION">
+  <img src="images/screen3.jpg" width="48%" alt="Capture du jeu OPÉRATION">
+  <img src="images/screen5.jpg" width="48%" alt="Capture du jeu OPÉRATION">
+  <img src="images/screen6.jpg" width="48%" alt="Capture du jeu OPÉRATION">
+  <img src="images/screenshot-82631537.jpg" width="48%" alt="Capture du jeu OPÉRATION">
+</p>
+
 ## Contenu
 
 ```
