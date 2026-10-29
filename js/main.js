@@ -1,11 +1,11 @@
 import * as THREE from "three";
-import { CONFIG, ETATS } from "./config.js?v=20261024m";
-import { Monde } from "./world.js?v=20261024m";
-import { Joueur, Entrees } from "./player.js?v=20261024m";
-import { Arme } from "./weapon.js?v=20261024m";
-import { GestionEnnemis } from "./enemies.js?v=20261024m";
-import { PostFX } from "./postfx.js?v=20261024m";
-import { Audio } from "./audio.js?v=20261024m";
+import { CONFIG, ETATS } from "./config.js?v=20261030d";
+import { Monde } from "./world.js?v=20261030d";
+import { Joueur, Entrees } from "./player.js?v=20261030d";
+import { Arme } from "./weapon.js?v=20261030d";
+import { GestionEnnemis } from "./enemies.js?v=20261030d";
+import { PostFX } from "./postfx.js?v=20261030d";
+import { Audio } from "./audio.js?v=20261030d";
 
 const $ = (id) => document.getElementById(id);
 
@@ -181,9 +181,13 @@ class Jeu {
         this.entrees.brancherDirections($("dpad"));
         this.arme = new Arme(this.camera, this.scene, this.audio);
         this.arme.onTouche = (tete) => this._surTouche(tete);
-        this.arme.onLampadaire = () => {
-          this._journal("LAMPADAIRE ÉTEINT");
-          this._vibrer(12);
+        this.arme.onLampadaire = (record, etat) => {
+          if (etat === "eteint") {
+            this._journal("LAMPADAIRE ÉTEINT");
+            this._vibrer(12);
+          } else {
+            this._journal(`LAMPADAIRE ${Math.round(record.niveau * 100)} %`);
+          }
         };
       }],
       ["Armement des hostiles…", () => {
@@ -480,6 +484,7 @@ class Jeu {
         `densité : ${window.devicePixelRatio}`,
         `WebGL2 : ${oui(gl)}`,
         `état : ${this.etat}`,
+        `lampadaires : ${(this.monde?.ampoules || []).map((a) => Math.round(a.niveau * 100)).join(" / ")} %`,
         `raison pause : ${this._raisonPause || "-"}`,
         `fps : ${(this._dernierFps || 0).toFixed(0)}`,
         `résolution : ${Math.round((this._resScale || 1) * 100)} %`,

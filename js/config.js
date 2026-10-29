@@ -52,6 +52,10 @@ export const CONFIG = {
     tempsReaction: 0.8,
   },
 
+  lampadaires: {
+    baisseParTir: 0.05,    // fraction de luminosité perdue par balle
+  },
+
   vagues: {
     premiere: 4,
     increment: 1,

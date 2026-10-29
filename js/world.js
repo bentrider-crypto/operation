@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261024m";
-import { Textures } from "./textures.js?v=20261024m";
+import { CONFIG } from "./config.js?v=20261030d";
+import { Textures } from "./textures.js?v=20261030d";
 
 /* =============================================================================
    Le niveau : un dépôt logistique de nuit, ceint de murs, avec un entrepôt
@@ -399,10 +399,11 @@ export class Monde {
 
     const mâts = [[-20, 6, 0], [20, -4, 0], [2, -20, 0], [-4, 20, 0]];
     for (const [x, z] of mâts) {
-      this._cylindre(0.11, 7.2, matMetal, x, 3.6, z, false, 8);
-      this._boite(1.6, 0.14, 0.14, matMetal, x + 0.7, 7.15, z, 0, false);
+      const mat = this._cylindre(0.11, 7.2, matMetal, x, 3.6, z, false, 8);
+      const bras = this._boite(1.6, 0.14, 0.14, matMetal, x + 0.7, 7.15, z, 0, false);
 
-      const ampoule = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.32), ampouleMat);
+      const materiauLampe = ampouleMat.clone();
+      const ampoule = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.32), materiauLampe);
       ampoule.position.set(x + 1.35, 7.0, z);
       this.scene.add(ampoule);
 
@@ -418,11 +419,13 @@ export class Monde {
 
       const record = {
         ampoule, cible, lumiere: l, base: 26, phase: Math.random() * 6.28,
-        eteinte: false, _extinction: 0,
-        materiauAllume: ampouleMat, materiauEteint: ampouleEteinteMat,
+        eteinte: false, _extinction: 0, niveau: 1, _niveauExtinction: 1,
+        materiauAllume: materiauLampe, materiauEteint: ampouleEteinteMat,
       };
       ampoule.userData.lampadaire = record;
       cible.userData.lampadaire = record;
+      mat.userData.lampadaire = record;
+      bras.userData.lampadaire = record;
       this.ampoules.push(record);
     }
 
@@ -440,20 +443,29 @@ export class Monde {
     }
   }
 
-  eteindreLampadaire(record) {
-    if (!record || record.eteinte) return false;
+  toucherLampadaire(record) {
+    if (!record || record.eteinte) return null;
+    const avant = record.niveau;
+    record.niveau = Math.max(0, avant - CONFIG.lampadaires.baisseParTir);
+    record.materiauAllume.emissiveIntensity = 5 * record.niveau;
+    if (record.halo) record.halo.material.opacity = 0.5 * record.niveau;
+    if (record.niveau > 0) return "baisse";
+    record._niveauExtinction = avant;
     record.eteinte = true;
     record._extinction = 0.6;
     record.ampoule.material = record.materiauEteint;
     if (record.halo) record.halo.visible = false;
-    return true;
+    return "eteint";
   }
 
   reinitialiserLampadaires() {
     for (const a of this.ampoules) {
       a.eteinte = false;
       a._extinction = 0;
+      a.niveau = 1;
+      a._niveauExtinction = 1;
       a.ampoule.material = a.materiauAllume;
+      a.materiauAllume.emissiveIntensity = 5;
       a.lumiere.intensity = a.base;
       if (a.halo) {
         a.halo.visible = true;
@@ -573,7 +585,7 @@ export class Monde {
         if (a._extinction > 0) {
           a._extinction = Math.max(0, a._extinction - dt);
           const k = a._extinction / 0.6;
-          a.lumiere.intensity = a.base * k * (Math.random() < 0.45 ? 1 : 0.12);
+          a.lumiere.intensity = a.base * a._niveauExtinction * k * (Math.random() < 0.45 ? 1 : 0.12);
         } else {
           a.lumiere.intensity = 0;
         }
@@ -581,8 +593,9 @@ export class Monde {
         continue;
       }
       const f = 1 + Math.sin(temps * 7 + a.phase) * 0.03 + Math.sin(temps * 23 + a.phase * 2) * 0.015;
-      a.lumiere.intensity = a.base * f;
-      if (a.halo) a.halo.material.opacity = 0.5 * f;
+      a.lumiere.intensity = a.base * a.niveau * f;
+      if (a.halo) a.halo.material.opacity = 0.5 * a.niveau * f;
+      a.materiauAllume.emissiveIntensity = 5 * a.niveau;
     }
     // Dérive lente des poussières.
     if (this.poussieres) {

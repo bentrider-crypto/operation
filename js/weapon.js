@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261024m";
+import { CONFIG } from "./config.js?v=20261030d";
 
 /* =============================================================================
    Arme à la première personne : modèle géométrique, recul, visée, rechargement
@@ -257,10 +257,10 @@ export class Arme {
         this.onTouche?.(tete);
       }
       if (donnees?.lampadaire) {
-        const eteint = monde.eteindreLampadaire(donnees.lampadaire);
-        if (eteint) {
-          this.audio?.lampadaire();
-          this.onLampadaire?.(donnees.lampadaire);
+        const etat = monde.toucherLampadaire(donnees.lampadaire);
+        if (etat) {
+          if (etat === "eteint") this.audio?.lampadaire();
+          this.onLampadaire?.(donnees.lampadaire, etat);
         }
       }
     } else {
