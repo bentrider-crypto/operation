@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261030d";
+import { CONFIG } from "./config.js?v=20261030i";
 
 /* =============================================================================
    Entrées clavier/souris + contrôleur du joueur (capsule contre boîtes AABB).

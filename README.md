@@ -154,9 +154,9 @@ tactiles et clavier, réglages persistants.
 
 Le modèle d'arme est rendu dans une couche séparée : il ne traverse plus
 visuellement les murs. Les balles sont arrêtées par le décor, même à bout
-portant. Les **lampadaires sont destructibles** : chaque tir qui touche un lampadaire
-réduit sa lumière de 5 % ; après vingt tirs, elle grésille puis s'éteint, avec son
-halo. Ils se rallument au début d'une nouvelle partie.
+portant. Les **lampadaires sont destructibles** : les tirs réduisent leur lumière
+jusqu'à l'extinction, avec un grésillement et la disparition du halo. Ils se
+rallument au début d'une nouvelle partie.
 
 Les apparitions sont vérifiées pour ne jamais placer un hostile dans un mur ou
 hors de l'arène. Si un hostile s'y retrouve malgré tout, il est replacé sur un

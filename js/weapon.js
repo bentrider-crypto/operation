@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONFIG } from "./config.js?v=20261030d";
+import { CONFIG } from "./config.js?v=20261030i";
 
 /* =============================================================================
    Arme à la première personne : modèle géométrique, recul, visée, rechargement
@@ -57,9 +57,9 @@ export class Arme {
     this.aideVisee = false;
     this._origine = new THREE.Vector3();
     this._direction = new THREE.Vector3();
+    this.mireNdc = new THREE.Vector2(0, 0);
     this._tmpMonde = new THREE.Vector3();
     this._douilleLocale = new THREE.Vector3(0.03, 0.03, -0.12);
-    this.onLampadaire = null;
     this._viseur = new THREE.Vector2(0, 0);
     this._effets = [];
     this._decals = [];
@@ -219,8 +219,11 @@ export class Arme {
     e.tirTenus++;
     this.audio?.tir();
 
-    this.camera.getWorldPosition(this._origine);
-    this.camera.getWorldDirection(this._direction);
+    // Le tir passe par la position réelle de la croix, pas forcément le centre.
+    this.camera.updateMatrixWorld();
+    this.raycaster.setFromCamera(this.mireNdc, this.camera);
+    this._origine.copy(this.raycaster.ray.origin);
+    this._direction.copy(this.raycaster.ray.direction);
     if (this.aideVisee) this._viserAssiste(ennemis, monde);
 
     const dispersion = THREE.MathUtils.lerp(
@@ -260,7 +263,6 @@ export class Arme {
         const etat = monde.toucherLampadaire(donnees.lampadaire);
         if (etat) {
           if (etat === "eteint") this.audio?.lampadaire();
-          this.onLampadaire?.(donnees.lampadaire, etat);
         }
       }
     } else {

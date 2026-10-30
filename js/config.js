@@ -18,6 +18,7 @@ export const CONFIG = {
 
   arme: {
     nom: "MK-7",
+    mireY: 60,             // hauteur de la croix, en % de l'écran
     cadence: 600,          // coups/minute
     degats: 24,
     degatsTete: 68,

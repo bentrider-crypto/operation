@@ -215,7 +215,7 @@ input[type="checkbox"] { accent-color: #4bd488; width: 16px; height: 16px; }
 
 /* viseur */
 #viseur {
-  position: absolute; left: 50%; top: 50%;
+  position: absolute; left: 50%; top: var(--mire-y, 50%);
   width: 44px; height: 44px; margin: -22px 0 0 -22px;
   --ecart: 9px;
   transition: opacity .12s;
@@ -237,7 +237,7 @@ input[type="checkbox"] { accent-color: #4bd488; width: 16px; height: 16px; }
 
 /* marqueur de touche */
 #marqueur-touche {
-  position: absolute; left: 50%; top: 50%;
+  position: absolute; left: 50%; top: var(--mire-y, 50%);
   width: 26px; height: 26px; margin: -13px 0 0 -13px;
   opacity: 0;
   background:
@@ -331,7 +331,7 @@ input[type="checkbox"] { accent-color: #4bd488; width: 16px; height: 16px; }
 
 /* message central */
 #message-centre {
-  position: absolute; left: 50%; top: 62%;
+  position: absolute; left: 50%; top: var(--message-y, 62%);
   transform: translate(-50%, -50%);
   text-align: center;
   font-size: clamp(18px, 3vw, 30px);
