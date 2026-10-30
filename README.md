@@ -1,4 +1,4 @@
-# OPÉRATION — jeu d'arcade mobile sur un  raspberry 5
+# OPÉRATION — jeu d'arcade mobile sur un  raspberry pi 5
 
 Petit jeu de tir 3D à la première personne, jouable au doigt sur téléphone.
 Aucune dépendance réseau : Three.js est vendorisé, les textures sont générées au
